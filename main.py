@@ -78,7 +78,7 @@ def process_events(events):
 
 if __name__ == '__main__':
     configure_logging()
-    schedule.every(15).seconds.do(prune_listening)
+    schedule.every(5).seconds.do(prune_listening)
     slack_client = SlackClient(SLACK_TOKEN)
 
     CHANNEL_ID = get_channel_by_name(slack_client, CHANNEL_NAME)
