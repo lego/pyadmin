@@ -70,9 +70,11 @@ def process_events(events):
                 # Not a valid command? Delete!
                 delete_message(slack_client, event)
         elif event_type == 'reaction_added':
-            event_id = get_id(event['item'])
-            if listening.get(event_id, {'fn': lambda: None})['fn']():
-                del listening[event_id]
+            item = event['item']
+            if 'channel' in item and 'ts' in item:
+                event_id = get_id(event['item'])
+                if listening.get(event_id, {'fn': lambda: None})['fn']():
+                    del listening[event_id]
 
 if __name__ == '__main__':
     configure_logging()
