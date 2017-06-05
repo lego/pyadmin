@@ -27,12 +27,19 @@ def process_events(events):
             if event.get('channel', None) != CHANNEL_ID:
                 break
 
+            # We only care about top level messages.
+            if 'thread_ts' in event:
+                break
+
+            # We only care about messages from other users.
+            if event['user'] == ME:
+                break
+
             # See if it's a valid command.
             argv = event['text'].split()
             if argv[0] not in COMMANDS:
-                if 'thread_ts' not in event and event['user'] != ME:
-                    # Not in a thread and not written by me? Delete!
-                    delete_message(slack_client, event)
+                # Not a command? Delete!
+                delete_message(slack_client, event)
                 break
 
             command = COMMANDS[argv[0]]
@@ -44,6 +51,9 @@ def process_events(events):
                     handler_handler(slack_client, event, vals, command)
                 except Exception:
                     logging.exception('exception encountered running command')
+            else:
+                # Not a valid command? Delete!
+                delete_message(slack_client, event)
         elif event_type == 'reaction_added':
             event_id = get_id(event['item'])
             if listening.get(event_id, lambda: None)():
