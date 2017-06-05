@@ -15,10 +15,13 @@ def handler_handler(slack_client, event, args, command):
     logging.info(f'event={event}, args={args}, command={command}')
 
     channel = event['channel']
-    response = post_message(slack_client, channel, command['message'](args))
-
     if command['vote']:
         votes_required = get_value(command['key'])
+        response = post_message(
+            slack_client,
+            channel,
+            command['message'](args) + f' {votes_required} votes required.'
+        )
 
         def handler():
             reactions = slack_client.api_call(
@@ -35,13 +38,15 @@ def handler_handler(slack_client, event, args, command):
                 return False
 
         listening[get_id(response)] = handler
+    else:
+        post_message(slack_client, channel, command['message'](args))
 
 def vote_handler(slack_client, channel, args):
     '''
     Changes the number of votes required.
     '''
     set_value(COMMANDS[args[0]]['key'], args[1])
-    post_message(slack_client, channel, 'Value set.')
+    post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
 
 def rename_handler(slack_client, channel, args):
     '''
@@ -55,9 +60,9 @@ def rename_handler(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not rename channel response={response}')
-        post_message(slack_client, channel, 'Could not rename channel.')
+        post_message(slack_client, channel, f'Could not rename <#{args[0]}> to {args[1]}.')
     else:
-        post_message(slack_client, channel, 'Channel renamed.')
+        post_message(slack_client, channel, f'Renamed <#{args[0]}> to {args[1]}.')
 
 def kick_handler(slack_client, channel, args):
     '''
@@ -70,9 +75,9 @@ def kick_handler(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not kick user response={response}')
-        post_message(slack_client, channel, 'Could not kick user.')
+        post_message(slack_client, channel, f'Could not kick <@{args[0]}> from <#{args[1]}>.')
     else:
-        post_message(slack_client, channel, 'User kicked.')
+        post_message(slack_client, channel, f'Kicked <@{args[0]}> from <#{args[1]}>.')
 
 def invite_handler(slack_client, channel, args):
     '''
@@ -84,9 +89,9 @@ def invite_handler(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not invite user response={response}')
-        post_message(slack_client, channel, 'Could not invite user.')
+        post_message(slack_client, channel, f'Could not invite <mailto:{args[0]}> to this slack.')
     else:
-        post_message(slack_client, channel, 'Invited user')
+        post_message(slack_client, channel, f'Invited <mailto:{args[0]}> to this slack.')
 
 HELP_MESSAGE = '''Actions are voted on using :+1: and :-1:. I support the following commands:
     – `$help`
