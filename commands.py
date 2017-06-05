@@ -3,6 +3,7 @@ All commands and their metadata live in here.
 '''
 
 import logging
+import time
 from store import get_value, set_value
 from slack_utils import ArgumentType, get_id, get_reaction_sum, post_message
 
@@ -37,7 +38,7 @@ def handler_handler(slack_client, event, args, command):
             else:
                 return False
 
-        listening[get_id(response)] = handler
+        listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
     else:
         post_message(slack_client, channel, command['message'](args))
 

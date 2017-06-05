@@ -8,9 +8,24 @@ looks decent to me.
 import time
 import logging
 from commands import COMMANDS, listening, handler_handler
-from config import SLACK_TOKEN, SLEEP_TIME, CHANNEL_NAME, configure_logging
+import schedule
+from config import SLACK_TOKEN, SLEEP_TIME, CHANNEL_NAME, MAX_LISTENING, configure_logging
 from slackclient import SlackClient
 from slack_utils import parse_arguments, get_id, get_channel_by_name, get_self, delete_message
+
+def prune_listening():
+    '''
+    Iterates over listening and removes all events which are older
+    than MAX_LISTENING seconds.
+    '''
+    now = time.time()
+    logging.info(f'now={now} listening={listening}')
+    expired_events = []
+    for key, val in listening.items():
+        if now - val['ts'] > MAX_LISTENING:
+            expired_events.append(key)
+    for expired_event in expired_events:
+        del listening[expired_event]
 
 def process_events(events):
     '''
@@ -56,11 +71,12 @@ def process_events(events):
                 delete_message(slack_client, event)
         elif event_type == 'reaction_added':
             event_id = get_id(event['item'])
-            if listening.get(event_id, lambda: None)():
+            if listening.get(event_id, {'fn': lambda: None})['fn']():
                 del listening[event_id]
 
 if __name__ == '__main__':
     configure_logging()
+    schedule.every().hour.do(prune_listening)
     slack_client = SlackClient(SLACK_TOKEN)
 
     CHANNEL_ID = get_channel_by_name(slack_client, CHANNEL_NAME)
@@ -70,6 +86,7 @@ if __name__ == '__main__':
         logging.info('connected')
         while True:
             process_events(slack_client.rtm_read())
+            schedule.run_pending()
             time.sleep(SLEEP_TIME)
     else:
         logging.critical('connection failed, invalid token?')
