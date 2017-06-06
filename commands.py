@@ -156,7 +156,7 @@ COMMANDS = {
     },
     '$ping': {
         'args': [],
-        'handler_handler': synchronous_handler,
+        'handler': synchronous_handler,
         'fn': pong_fn
     },
     '$update': {
@@ -166,28 +166,28 @@ COMMANDS = {
     },
     '$vote': {
         'args': [ArgumentType.COMMAND, ArgumentType.INT],
-        'handler_handler': vote_handler,
+        'handler': vote_handler,
         'fn': vote_fn,
         'message': lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
         'key': 'vote'
     },
     '$rename': {
         'args': [ArgumentType.CHANNEL, ArgumentType.STRING],
-        'handler_handler': vote_handler,
+        'handler': vote_handler,
         'fn': rename_fn,
         'message': lambda args: f'Rename <#{args[0]}> to {args[1]}?',
         'key': 'rename'
     },
     '$kick': {
         'args': [ArgumentType.USER, ArgumentType.CHANNEL],
-        'handler_handler': vote_handler,
+        'handler': vote_handler,
         'fn': kick_fn,
         'message': lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
         'key': 'kick'
     },
     '$invite': {
         'args': [ArgumentType.EMAIL],
-        'handler_handler': vote_handler,
+        'handler': vote_handler,
         'fn': invite_fn,
         'message': lambda args: f'Invite <mailto:{args[0]}> to this slack?',
         'key': 'invite'
