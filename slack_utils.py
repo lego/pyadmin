@@ -27,7 +27,7 @@ def parse_channel(input_string):
     match = re.search('<#(?P<id>[^|]+)|(?P<name>[^>])>', input_string)
     if not match:
         return None, False
-    return (ArgumentType.CHANNEL, match.group('id').replace('#', '')), True
+    return (ArgumentType.CHANNEL, match.group('id')), True
 
 def parse_user(input_string):
     '''

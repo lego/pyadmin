@@ -56,7 +56,7 @@ def rename_handler(slack_client, channel, args):
     response = slack_client.api_call(
         'channels.rename',
         channel=args[0],
-        name=args[1],
+        name=args[1].replace('#', ''),
         validate=True
     )
     if not response['ok']:
