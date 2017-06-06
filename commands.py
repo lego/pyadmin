@@ -7,52 +7,70 @@ import time
 import sys
 import os
 import git
+from config import ADMIN, CHANNEL_NAME
 from store import get_value, set_value
-from slack_utils import ArgumentType, get_id, get_reaction_sum, post_message
+from slack_utils import ArgumentType, get_id, get_reaction_sum, post_message, get_channel_by_name
 
 listening = {}
 
-def handler_handler(slack_client, event, args, command):
+def vote_handler(slack_client, event, args, command):
     '''
-    The master function. Does some master stuff.
+    Handles vote based commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
 
+    # Filter to only the CHANNEL_NAME channel.
+    channel_id = get_channel_by_name(slack_client, CHANNEL_NAME)
+    if event.get('channel', None) != channel_id:
+        return
+
     channel = event['channel']
-    if command['vote']:
-        votes_required = get_value(command['key'])
-        response = post_message(
-            slack_client,
-            channel,
-            command['message'](args) + f' {votes_required} votes required.'
+    votes_required = get_value(command['key'])
+    response = post_message(
+        slack_client,
+        channel,
+        command['message'](args) + f' {votes_required} votes required.'
+    )
+
+    def handler():
+        reactions = slack_client.api_call(
+            'reactions.get',
+            channel=response['channel'],
+            timestamp=response['ts'],
+            full=True
         )
+        current_votes = get_reaction_sum(reactions)
+        if current_votes >= votes_required:
+            command['fn'](slack_client, channel, args)
+            return True
+        else:
+            return False
 
-        def handler():
-            reactions = slack_client.api_call(
-                'reactions.get',
-                channel=response['channel'],
-                timestamp=response['ts'],
-                full=True
-            )
-            current_votes = get_reaction_sum(reactions)
-            if current_votes >= votes_required:
-                command['handler'](slack_client, channel, args)
-                return True
-            else:
-                return False
+    listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
 
-        listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
-    else:
-        post_message(slack_client, channel, command['message'](args))
+def synchronous_handler(slack_client, event, args, command):
+    '''
+    Handlers synchronous commands.
+    '''
+    logging.info(f'event={event}, args={args}, command={command}')
+    command['fn'](slack_client, event['channel'], args)
 
-def vote_handler(slack_client, channel, args):
+def admin_handler(slack_client, event, args, command):
+    '''
+    Handles admin level commands.
+    '''
+    logging.info(f'event={event}, args={args}, command={command}')
+    if event['user'] == ADMIN:
+        command['fn'](slack_client, event['channel'], args)
+
+def vote_fn(slack_client, channel, args):
     '''
     Changes the number of votes required.
     '''
     set_value(COMMANDS[args[0]]['key'], args[1])
     post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
 
-def rename_handler(slack_client, channel, args):
+def rename_fn(slack_client, channel, args):
     '''
     Changes the name of a channel.
     '''
@@ -68,7 +86,7 @@ def rename_handler(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Renamed <#{args[0]}> to {args[1]}.')
 
-def kick_handler(slack_client, channel, args):
+def kick_fn(slack_client, channel, args):
     '''
     Kicks a user from a channel.
     '''
@@ -83,7 +101,7 @@ def kick_handler(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Kicked <@{args[0]}> from <#{args[1]}>.')
 
-def invite_handler(slack_client, channel, args):
+def invite_fn(slack_client, channel, args):
     '''
     Invites a user to this slack.
     '''
@@ -97,7 +115,26 @@ def invite_handler(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Invited <mailto:{args[0]}> to this slack.')
 
-def update_handler(slack_client, channel, args):
+def help_fn(slack_client, channel, args):
+    '''
+    Outputs a help message.
+    '''
+    help_message = '''Actions are voted on using :+1: and :-1:. I support the following commands:
+    – `$help`
+    – `$vote <command> <int>`
+    – `$rename <channel> <string>`
+    – `$kick <user> <channel>`
+    – `$invite <email>`'''
+
+    post_message(slack_client, channel, help_message)
+
+def pong_fn(slack_client, channel, args):
+    '''
+    Outputs a pong.
+    '''
+    post_message(slack_client, channel, 'pong')
+
+def update_fn(slack_client, channel, args):
     '''
     Pulls from git and reloads the process.
     '''
@@ -111,53 +148,48 @@ def update_handler(slack_client, channel, args):
     # This will not return. Instead, the process will be immediately replaced.
     os.execl(sys.executable, *([sys.executable]+sys.argv))
 
-HELP_MESSAGE = '''Actions are voted on using :+1: and :-1:. I support the following commands:
-    – `$help`
-    – `$vote <command> <int>`
-    – `$rename <channel> <string>`
-    – `$kick <user> <channel>`
-    – `$invite <email>`
-    – `$update`'''
-
 COMMANDS = {
     '$help': {
         'args': [],
-        'message': lambda args: HELP_MESSAGE,
-        'vote': False,
+        'handler': synchronous_handler,
+        'fn': help_fn
+    },
+    '$ping': {
+        'args': [],
+        'handler_handler': synchronous_handler,
+        'fn': pong_fn
+    },
+    '$update': {
+        'args': [],
+        'handler': admin_handler,
+        'fn': update_fn
     },
     '$vote': {
         'args': [ArgumentType.COMMAND, ArgumentType.INT],
-        'handler': vote_handler,
+        'handler_handler': vote_handler,
+        'fn': vote_fn,
         'message': lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
-        'vote': True,
         'key': 'vote'
     },
     '$rename': {
         'args': [ArgumentType.CHANNEL, ArgumentType.STRING],
-        'handler': rename_handler,
+        'handler_handler': vote_handler,
+        'fn': rename_fn,
         'message': lambda args: f'Rename <#{args[0]}> to {args[1]}?',
-        'vote': True,
         'key': 'rename'
     },
     '$kick': {
         'args': [ArgumentType.USER, ArgumentType.CHANNEL],
-        'handler': kick_handler,
+        'handler_handler': vote_handler,
+        'fn': kick_fn,
         'message': lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
-        'vote': True,
         'key': 'kick'
     },
     '$invite': {
         'args': [ArgumentType.EMAIL],
-        'handler': invite_handler,
+        'handler_handler': vote_handler,
+        'fn': invite_fn,
         'message': lambda args: f'Invite <mailto:{args[0]}> to this slack?',
-        'vote': True,
         'key': 'invite'
     },
-    '$update': {
-        'args': [],
-        'handler': update_handler,
-        'message': lambda args: f'Update code? This will cancel any listening jobs.',
-        'vote': True,
-        'key': 'update'
-    }
 }

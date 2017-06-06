@@ -7,11 +7,11 @@ looks decent to me.
 
 import time
 import logging
-from commands import COMMANDS, listening, handler_handler
+from commands import COMMANDS, listening
 import schedule
-from config import SLACK_TOKEN, SLEEP_TIME, CHANNEL_NAME, MAX_LISTENING, configure_logging
+from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, configure_logging
 from slackclient import SlackClient
-from slack_utils import parse_arguments, get_id, get_channel_by_name, get_self, delete_message
+from slack_utils import parse_arguments, get_id, get_self, delete_message
 
 def prune_listening():
     '''
@@ -38,10 +38,6 @@ def process_events(events):
     for event in events:
         event_type = event.get('type', None)
         if event_type == 'message' and 'text' in event:
-            # Filter to the channel we're listening in.
-            if event.get('channel', None) != CHANNEL_ID:
-                break
-
             # We only care about top level messages.
             if 'thread_ts' in event:
                 break
@@ -63,7 +59,7 @@ def process_events(events):
 
             if command['args'] == typs:
                 try:
-                    handler_handler(slack_client, event, vals, command)
+                    command['handler_handler'](slack_client, event, vals, command)
                 except Exception:
                     logging.exception('exception encountered running command')
             else:
@@ -81,7 +77,6 @@ if __name__ == '__main__':
     schedule.every().hour.do(prune_listening)
     slack_client = SlackClient(SLACK_TOKEN)
 
-    CHANNEL_ID = get_channel_by_name(slack_client, CHANNEL_NAME)
     ME = get_self(slack_client)
 
     if slack_client.rtm_connect():

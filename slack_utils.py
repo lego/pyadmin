@@ -5,6 +5,7 @@ Various slack utilities, mostly related to parsing arguments.
 import re
 import logging
 import commands
+from functools import lru_cache
 from enum import Enum, auto
 
 class ArgumentType(Enum):
@@ -128,6 +129,7 @@ def post_message(slack_client, channel, text):
         raise Exception('could not post message')
     return response
 
+@lru_cache()
 def get_channel_by_name(slack_client, channel):
     '''
     Returns the channel ID from the name.
