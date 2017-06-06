@@ -107,7 +107,6 @@ def get_reaction_sum(event):
     up_votes = 0
     down_votes = 0
     for reaction in event['message']['reactions']:
-        print(reaction)
         if reaction['name'] == '+1':
             up_votes += reaction['count']
         if reaction['name'] == '-1':
