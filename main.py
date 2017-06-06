@@ -59,7 +59,7 @@ def process_events(events):
 
             if command['args'] == typs:
                 try:
-                    command['handler_handler'](slack_client, event, vals, command)
+                    command['handler'](slack_client, event, vals, command)
                 except Exception:
                     logging.exception('exception encountered running command')
             else:
