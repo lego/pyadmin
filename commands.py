@@ -4,6 +4,9 @@ All commands and their metadata live in here.
 
 import logging
 import time
+import sys
+import os
+import git
 from store import get_value, set_value
 from slack_utils import ArgumentType, get_id, get_reaction_sum, post_message
 
@@ -94,6 +97,20 @@ def invite_handler(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Invited <mailto:{args[0]}> to this slack.')
 
+def update_handler(slack_client, channel, args):
+    '''
+    Pulls from git and reloads the process.
+    '''
+    g = git.cmd.Git('.')
+    try:
+        g.pull()
+    except Exception:
+        post_message(slack_client, channel, f'Could not git pull.')
+        return
+
+    # This will not return. Instead, the process will be immediately replaced.
+    os.execl(sys.executable, *([sys.executable]+sys.argv))
+
 HELP_MESSAGE = '''Actions are voted on using :+1: and :-1:. I support the following commands:
     – `$help`
     – `$vote <command> <int>`
@@ -128,11 +145,18 @@ COMMANDS = {
         'vote': True,
         'key': 'kick'
     },
-    '$invite':{
+    '$invite': {
         'args': [ArgumentType.EMAIL],
         'handler': invite_handler,
         'message': lambda args: f'Invite <mailto:{args[0]}> to this slack?',
         'vote': True,
         'key': 'invite'
+    },
+    '$update': {
+        'args': [],
+        'handler': update_handler,
+        'message': lambda args: f'Update code? This will cancel any listening jobs.',
+        'vote': True,
+        'key': 'update'
     }
 }

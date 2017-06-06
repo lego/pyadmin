@@ -12,6 +12,8 @@ def get_value(key):
     '''
     logging.info(f'key={key}')
     with shelve.open(DB) as shelve_db:
+        if key not in shelve_db:
+            shelve_db[key] = 1
         return shelve_db[key]
 
 def set_value(key, val):
