@@ -107,10 +107,11 @@ def get_reaction_sum(event):
     up_votes = 0
     down_votes = 0
     for reaction in event['message']['reactions']:
+        print(reaction)
         if reaction['name'] == '+1':
-            up_votes += 1
+            up_votes += reaction['count']
         if reaction['name'] == '-1':
-            down_votes += 1
+            down_votes += reaction['count']
     return up_votes - down_votes
 
 def post_message(slack_client, channel, text):
@@ -130,13 +131,13 @@ def post_message(slack_client, channel, text):
 
 def get_channel_by_name(slack_client, channel):
     '''
-    Returns the channel ID from the name or None.
+    Returns the channel ID from the name.
     '''
     response = slack_client.api_call(
         'channels.list'
     )
     if not response['ok']:
-        raise Exception('could not get channel')
+        raise Exception(f'could not get channel response={response}')
     for ch in response['channels']:
         if ch['name'] == channel:
             return ch['id']
