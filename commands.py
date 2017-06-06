@@ -117,7 +117,7 @@ HELP_MESSAGE = '''Actions are voted on using :+1: and :-1:. I support the follow
     – `$rename <channel> <string>`
     – `$kick <user> <channel>`
     – `$invite <email>`
-    – `$invite`'''
+    – `$update`'''
 
 COMMANDS = {
     '$help': {
