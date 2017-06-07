@@ -9,9 +9,9 @@ import time
 import logging
 from commands import COMMANDS, listening
 import schedule
-from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, CHANNEL, configure_logging
+from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, configure_logging
 from slackclient import SlackClient
-from slack_utils import parse_arguments, get_id, get_self, delete_message, get_channel_by_name
+from slack_utils import parse_arguments, get_id, get_self, delete_message
 
 def prune_listening():
     '''
@@ -63,9 +63,8 @@ def process_events(events):
                 except Exception:
                     logging.exception('exception encountered running command')
             else:
-                if event.get('channel', None) == get_channel_by_name(slack_client, CHANNEL):
-                    # Not a valid command and in CHANNEL? Delete!
-                    delete_message(slack_client, event)
+                # Not a valid command and in CHANNEL? Delete!
+                delete_message(slack_client, event)
         elif event_type == 'reaction_added':
             item = event['item']
             if 'channel' in item and 'ts' in item:

@@ -7,6 +7,7 @@ import logging
 import commands
 from functools import lru_cache
 from enum import Enum, auto
+from config import CHANNEL
 
 class ArgumentType(Enum):
     '''
@@ -180,6 +181,10 @@ def delete_message(slack_client, event):
     '''
     Given a message event we attempt to delete it.
     '''
+    # We only delete messages from one channel.
+    if event['channel'] != get_channel_by_name(slack_client, CHANNEL):
+        return
+
     response = slack_client.api_call(
         'chat.delete',
         ts=event['ts'],
