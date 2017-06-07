@@ -10,7 +10,7 @@ import git
 from config import ADMIN, CHANNEL
 from store import get_value, set_value
 from slack_utils import (ArgumentType, get_id, get_reaction_sum, post_message,
-                         get_channel_by_name, get_user_by_name)
+                         get_channel_by_name, get_user_by_name, delete_message)
 
 listening = {}
 
@@ -63,6 +63,8 @@ def admin_handler(slack_client, event, args, command):
     logging.info(f'event={event}, args={args}, command={command}')
     if event['user'] == get_user_by_name(slack_client, ADMIN):
         command['fn'](slack_client, event['channel'], args)
+    else:
+        delete_message(slack_client, event)
 
 def vote_fn(slack_client, channel, args):
     '''
