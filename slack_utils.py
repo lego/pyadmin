@@ -53,11 +53,12 @@ def parse_email(input_string):
 
 def parse_command(input_string):
     '''
-    Input format: $rename
+    Input format: $rename. Only accepts commands which are votable.
     '''
     logging.info(f'input_string={input_string}')
     if input_string in commands.COMMANDS:
-        return (ArgumentType.COMMAND, input_string), True
+        if 'key' in commands.COMMANDS[input_string]:
+            return (ArgumentType.COMMAND, input_string), True
     return None, False
 
 def parse_int(input_string):
