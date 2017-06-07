@@ -25,7 +25,6 @@ def parse_channel(input_string):
     '''
     Input format: <#C052EM50K|waterloo>
     '''
-    logging.info(f'input_string={input_string}')
     match = re.search('<#(?P<id>[^|]+)|(?P<name>[^>])>', input_string)
     if not match:
         return None, False
@@ -35,7 +34,6 @@ def parse_user(input_string):
     '''
     Input format: <@U088EGWEL>
     '''
-    logging.info(f'input_string={input_string}')
     match = re.search('<@(?P<id>[^>]+)>', input_string)
     if not match:
         return None, False
@@ -45,7 +43,6 @@ def parse_email(input_string):
     '''
     Input format: <mailto:tsohlson@gmail.com|tsohlson@gmail.com>
     '''
-    logging.info(f'input_string={input_string}')
     match = re.search('<mailto:(?P<email>[^|]+).+>', input_string)
     if not match:
         return None, False
@@ -55,7 +52,6 @@ def parse_command(input_string):
     '''
     Input format: $rename. Only accepts commands which are votable.
     '''
-    logging.info(f'input_string={input_string}')
     if input_string in commands.COMMANDS:
         if 'key' in commands.COMMANDS[input_string]:
             return (ArgumentType.COMMAND, input_string), True
@@ -65,7 +61,6 @@ def parse_int(input_string):
     '''
     Input format: 5
     '''
-    logging.info(f'input_string={input_string}')
     try:
         return (ArgumentType.INT, int(input_string)), True
     except ValueError:

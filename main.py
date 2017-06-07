@@ -55,7 +55,7 @@ def process_events(events):
 
             command = COMMANDS[argv[0]]
             typs, vals = parse_arguments(argv[1:])
-            logging.info(f'parse_types={typs} parse_values={vals}')
+            logging.info(f'argv={argv} parse_types={typs} parse_values={vals}')
 
             if command['args'] == typs:
                 try:
