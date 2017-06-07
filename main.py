@@ -23,11 +23,10 @@ def prune_listening():
     Iterates over listening and removes all events which are older
     than MAX_LISTENING seconds.
     '''
-    now = time.time()
-    logging.info(f'now={now} listening={listening}')
+    logging.info(f'listening={listening}')
     expired_events = []
     for key, val in listening.items():
-        if now - val['ts'] > MAX_LISTENING:
+        if time.time() - val['ts'] > MAX_LISTENING:
             expired_events.append(key)
     for expired_event in expired_events:
         del listening[expired_event]
@@ -37,8 +36,8 @@ def ping_slack():
     '''
     Pings slack through rtm.
     '''
-    response = slack_client.server.ping()
-    logging.info(f'response={response}')
+    slack_client.server.ping()
+
 
 def process_events(events):
     '''
