@@ -2,8 +2,9 @@
 Small helper script to quickly show, set, delete etc from our db.
 '''
 
-import sys
 import shelve
+import sys
+
 from config import DB
 
 args = sys.argv[1:]

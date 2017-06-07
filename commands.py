@@ -3,16 +3,20 @@ All commands and their metadata live in here.
 '''
 
 import logging
-import time
-import sys
 import os
+import sys
+import time
+
 import git
+
 from config import ADMIN, CHANNEL
+from slack_utils import (ArgumentType, delete_message, get_channel_by_name,
+                         get_id, get_reaction_sum, get_user_by_name,
+                         post_message)
 from store import get_value, set_value
-from slack_utils import (ArgumentType, get_id, get_reaction_sum, post_message,
-                         get_channel_by_name, get_user_by_name, delete_message)
 
 listening = {}
+
 
 def vote_handler(slack_client, event, args, command):
     '''
@@ -49,12 +53,14 @@ def vote_handler(slack_client, event, args, command):
 
     listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
 
+
 def synchronous_handler(slack_client, event, args, command):
     '''
     Handlers synchronous commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
     command['fn'](slack_client, event['channel'], args)
+
 
 def admin_handler(slack_client, event, args, command):
     '''
@@ -66,12 +72,14 @@ def admin_handler(slack_client, event, args, command):
     else:
         delete_message(slack_client, event)
 
+
 def vote_fn(slack_client, channel, args):
     '''
     Changes the number of votes required.
     '''
     set_value(COMMANDS[args[0]]['key'], args[1])
     post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
+
 
 def rename_fn(slack_client, channel, args):
     '''
@@ -89,6 +97,7 @@ def rename_fn(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Renamed <#{args[0]}> to {args[1]}.')
 
+
 def kick_fn(slack_client, channel, args):
     '''
     Kicks a user from a channel.
@@ -104,6 +113,7 @@ def kick_fn(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Kicked <@{args[0]}> from <#{args[1]}>.')
 
+
 def invite_fn(slack_client, channel, args):
     '''
     Invites a user to this slack.
@@ -118,6 +128,7 @@ def invite_fn(slack_client, channel, args):
     else:
         post_message(slack_client, channel, f'Invited <mailto:{args[0]}> to this slack.')
 
+
 def help_fn(slack_client, channel, args):
     '''
     Outputs a help message.
@@ -131,11 +142,13 @@ def help_fn(slack_client, channel, args):
 
     post_message(slack_client, channel, help_message)
 
+
 def pong_fn(slack_client, channel, args):
     '''
     Outputs a pong.
     '''
     post_message(slack_client, channel, 'pong')
+
 
 def update_fn(slack_client, channel, args):
     '''
@@ -149,7 +162,8 @@ def update_fn(slack_client, channel, args):
         return
 
     # This will not return. Instead, the process will be immediately replaced.
-    os.execl(sys.executable, *([sys.executable]+sys.argv))
+    os.execl(sys.executable, *([sys.executable] + sys.argv))
+
 
 COMMANDS = {
     '$update': {

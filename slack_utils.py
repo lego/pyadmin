@@ -2,12 +2,14 @@
 Various slack utilities, mostly related to parsing arguments.
 '''
 
-import re
-import logging
 import commands
-from functools import lru_cache
+import logging
+import re
 from enum import Enum, auto
+from functools import lru_cache
+
 from config import CHANNEL
+
 
 class ArgumentType(Enum):
     '''
@@ -21,6 +23,7 @@ class ArgumentType(Enum):
     COMMAND = auto()
     INT = auto()
 
+
 def parse_channel(input_string):
     '''
     Input format: <#C052EM50K|waterloo>
@@ -29,6 +32,7 @@ def parse_channel(input_string):
     if not match:
         return None, False
     return (ArgumentType.CHANNEL, match.group('id')), True
+
 
 def parse_user(input_string):
     '''
@@ -39,6 +43,7 @@ def parse_user(input_string):
         return None, False
     return (ArgumentType.USER, match.group('id')), True
 
+
 def parse_email(input_string):
     '''
     Input format: <mailto:tsohlson@gmail.com|tsohlson@gmail.com>
@@ -47,6 +52,7 @@ def parse_email(input_string):
     if not match:
         return None, False
     return (ArgumentType.EMAIL, match.group('email')), True
+
 
 def parse_command(input_string):
     '''
@@ -57,6 +63,7 @@ def parse_command(input_string):
             return (ArgumentType.COMMAND, input_string), True
     return None, False
 
+
 def parse_int(input_string):
     '''
     Input format: 5
@@ -65,6 +72,7 @@ def parse_int(input_string):
         return (ArgumentType.INT, int(input_string)), True
     except ValueError:
         return None, False
+
 
 def parse_arguments(args):
     '''
@@ -88,12 +96,14 @@ def parse_arguments(args):
         vals.append(val)
     return typs, vals
 
+
 def get_id(event):
     '''
     Returns the ID for an event given an event with a ts key and a
     channel key.
     '''
     return event['channel'] + event['ts']
+
 
 def get_reaction_sum(event):
     '''
@@ -110,6 +120,7 @@ def get_reaction_sum(event):
             down_votes += reaction['count']
     return up_votes - down_votes
 
+
 def post_message(slack_client, channel, text):
     '''
     Simple wrapper around slack_client.api_call('chat.postMessage'...).
@@ -124,6 +135,7 @@ def post_message(slack_client, channel, text):
         raise Exception(f'could not post message response={response}')
     return response
 
+
 def post_dm(slack_client, user_name, text):
     '''
     Takes a user name (e.g. tristan) and sends them a message.
@@ -136,12 +148,13 @@ def post_dm(slack_client, user_name, text):
 
     return post_message(slack_client, response['channel']['id'], text)
 
+
 @lru_cache()
 def get_channel_by_name(slack_client, channel):
     '''
     Returns the channel ID from the name.
     '''
-    response = slack_client.api_call('channels.list', exclude_archived=True, exclude_members=True)
+    response = slack_client.api_call('channels.list')
     if not response['ok']:
         raise Exception(f'could not get channel response={response}')
     for ch in response['channels']:
@@ -149,6 +162,7 @@ def get_channel_by_name(slack_client, channel):
             return ch['id']
 
     raise Exception(f'could not find channel response={response}')
+
 
 @lru_cache()
 def get_user_by_name(slack_client, user):
@@ -164,6 +178,7 @@ def get_user_by_name(slack_client, user):
 
     raise Exception(f'could not find user response={response}')
 
+
 def get_self(slack_client):
     '''
     Uses auth.test to get the current user id.
@@ -174,14 +189,16 @@ def get_self(slack_client):
 
     return response['user_id']
 
+
 def delete_message(slack_client, event):
     '''
     Given a message event we attempt to delete it.
     '''
     # We only delete messages from one channel.
-    if event['channel'] != get_channel_by_name(slack_client, CHANNEL):
+    channel = event['channel']
+    if channel != get_channel_by_name(slack_client, CHANNEL):
         return
 
-    response = slack_client.api_call('chat.delete', ts=event['ts'], channel=event['channel'])
+    response = slack_client.api_call('chat.delete', ts=event['ts'], channel=channel)
     if not response['ok']:
         logging.warning(f'response={response}')

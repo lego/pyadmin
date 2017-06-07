@@ -5,13 +5,18 @@ This is probably not how you should write python, but hey it
 looks decent to me.
 '''
 
-import time
 import logging
+import time
 from commands import COMMANDS, listening
+
 import schedule
-from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, ADMIN, configure_logging
 from slackclient import SlackClient
-from slack_utils import parse_arguments, get_id, get_self, delete_message, post_dm
+
+from config import (ADMIN, MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME,
+                    configure_logging)
+from slack_utils import (delete_message, get_id, get_self, parse_arguments,
+                         post_dm)
+
 
 def prune_listening():
     '''
@@ -26,6 +31,7 @@ def prune_listening():
             expired_events.append(key)
     for expired_event in expired_events:
         del listening[expired_event]
+
 
 def process_events(events):
     '''
@@ -71,6 +77,7 @@ def process_events(events):
                 event_id = get_id(event['item'])
                 if listening.get(event_id, {'fn': lambda: None})['fn']():
                     del listening[event_id]
+
 
 if __name__ == '__main__':
     configure_logging()

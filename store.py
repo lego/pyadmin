@@ -4,7 +4,9 @@ A minimal wrapper around shelve to remove the tiniest amount of boilerplate.
 
 import logging
 import shelve
+
 from config import DB
+
 
 def get_value(key):
     '''
@@ -15,6 +17,7 @@ def get_value(key):
         if key not in shelve_db:
             shelve_db[key] = 1
         return shelve_db[key]
+
 
 def set_value(key, val):
     '''
