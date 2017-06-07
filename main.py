@@ -9,9 +9,9 @@ import time
 import logging
 from commands import COMMANDS, listening
 import schedule
-from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, configure_logging
+from config import SLACK_TOKEN, SLEEP_TIME, MAX_LISTENING, ADMIN, configure_logging
 from slackclient import SlackClient
-from slack_utils import parse_arguments, get_id, get_self, delete_message
+from slack_utils import parse_arguments, get_id, get_self, delete_message, post_dm
 
 def prune_listening():
     '''
@@ -77,6 +77,7 @@ if __name__ == '__main__':
     schedule.every().hour.do(prune_listening)
     slack_client = SlackClient(SLACK_TOKEN)
     ME = get_self(slack_client)
+    post_dm(slack_client, ADMIN, 'Hello!')
 
     if slack_client.rtm_connect():
         logging.info('connected')

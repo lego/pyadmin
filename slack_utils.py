@@ -93,7 +93,6 @@ def get_id(event):
     Returns the ID for an event given an event with a ts key and a
     channel key.
     '''
-    logging.info(f'event={event}')
     return event['channel'] + event['ts']
 
 def get_reaction_sum(event):
@@ -122,20 +121,27 @@ def post_message(slack_client, channel, text):
         as_user=True
     )
     if not response['ok']:
-        logging.error(f'response={response}')
-        raise Exception('could not post message')
+        raise Exception(f'could not post message response={response}')
     return response
+
+def post_dm(slack_client, user_name, text):
+    '''
+    Takes a user name (e.g. tristan) and sends them a message.
+    '''
+    usr = get_user_by_name(slack_client, user_name)
+    response = slack_client.api_call('im.open', user=usr)
+    if not response['ok']:
+        logging.warning(f'response={response}')
+        return
+
+    return post_message(slack_client, response['channel']['id'], text)
 
 @lru_cache()
 def get_channel_by_name(slack_client, channel):
     '''
     Returns the channel ID from the name.
     '''
-    response = slack_client.api_call(
-        'channels.list',
-        exclude_archived=True,
-        exclude_members=True
-    )
+    response = slack_client.api_call('channels.list', exclude_archived=True, exclude_members=True)
     if not response['ok']:
         raise Exception(f'could not get channel response={response}')
     for ch in response['channels']:
@@ -149,10 +155,7 @@ def get_user_by_name(slack_client, user):
     '''
     Returns the user ID from name.
     '''
-    response = slack_client.api_call(
-        'users.list',
-        presence=False
-    )
+    response = slack_client.api_call('users.list', presence=False)
     if not response['ok']:
         raise Exception(f'could not get user response={response}')
     for usr in response['members']:
@@ -165,9 +168,7 @@ def get_self(slack_client):
     '''
     Uses auth.test to get the current user id.
     '''
-    response = slack_client.api_call(
-        'auth.test'
-    )
+    response = slack_client.api_call('auth.test')
     if not response['ok']:
         raise Exception(f'could not get self response={response}')
 
@@ -181,10 +182,6 @@ def delete_message(slack_client, event):
     if event['channel'] != get_channel_by_name(slack_client, CHANNEL):
         return
 
-    response = slack_client.api_call(
-        'chat.delete',
-        ts=event['ts'],
-        channel=event['channel']
-    )
+    response = slack_client.api_call('chat.delete', ts=event['ts'], channel=event['channel'])
     if not response['ok']:
         logging.warning(f'response={response}')
