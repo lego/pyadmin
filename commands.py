@@ -133,7 +133,7 @@ def help_fn(slack_client, channel, args):
     '''
     Outputs a help message.
     '''
-    help_message = '```Actions are voted on using :+1: and :-1:. I support the following commands:'
+    help_message = 'Actions are voted on using :+1: and :-1:. I support the following commands:```'
     for key, val in COMMANDS.items():
         line = f"\n  – {key}"
         for arg in val['args']:
