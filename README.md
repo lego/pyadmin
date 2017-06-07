@@ -22,10 +22,11 @@ def configure_logging():
     '''
     logging.basicConfig(filename=f'logs/{datetime.now()}.log', level=logging.DEBUG, format=FORMAT)
 
-CHANNEL_NAME = 'admin'
+CHANNEL = 'admin'
+ADMIN = 'tristan'
 FORMAT = "[%(asctime)s] [%(levelname)-8s] [%(funcName)-16s] [%(message)s]"
 DB = 'db'
 SLEEP_TIME = 0.1
-SLACK_TOKEN = [token]
-MAX_LISTENING = 86400 # 24 hours in seconds
+SLACK_TOKEN = [slack_token_here]
+MAX_LISTENING = 86400 * 7 # 24 hours * 7 in seconds
 ```
