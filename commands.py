@@ -7,9 +7,10 @@ import time
 import sys
 import os
 import git
-from config import ADMIN, CHANNEL_NAME
+from config import ADMIN, CHANNEL
 from store import get_value, set_value
-from slack_utils import ArgumentType, get_id, get_reaction_sum, post_message, get_channel_by_name
+from slack_utils import (ArgumentType, get_id, get_reaction_sum, post_message,
+                         get_channel_by_name, get_user_by_name)
 
 listening = {}
 
@@ -19,8 +20,8 @@ def vote_handler(slack_client, event, args, command):
     '''
     logging.info(f'event={event}, args={args}, command={command}')
 
-    # Filter to only the CHANNEL_NAME channel.
-    channel_id = get_channel_by_name(slack_client, CHANNEL_NAME)
+    # Filter to only the CHANNEL channel.
+    channel_id = get_channel_by_name(slack_client, CHANNEL)
     if event.get('channel', None) != channel_id:
         return
 
@@ -60,7 +61,7 @@ def admin_handler(slack_client, event, args, command):
     Handles admin level commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
-    if event['user'] == ADMIN:
+    if event['user'] == get_user_by_name(slack_client, ADMIN):
         command['fn'](slack_client, event['channel'], args)
 
 def vote_fn(slack_client, channel, args):
@@ -149,6 +150,11 @@ def update_fn(slack_client, channel, args):
     os.execl(sys.executable, *([sys.executable]+sys.argv))
 
 COMMANDS = {
+    '$update': {
+        'args': [],
+        'handler': admin_handler,
+        'fn': update_fn
+    },
     '$help': {
         'args': [],
         'handler': synchronous_handler,
@@ -158,11 +164,6 @@ COMMANDS = {
         'args': [],
         'handler': synchronous_handler,
         'fn': pong_fn
-    },
-    '$update': {
-        'args': [],
-        'handler': admin_handler,
-        'fn': update_fn
     },
     '$vote': {
         'args': [ArgumentType.COMMAND, ArgumentType.INT],

@@ -135,7 +135,9 @@ def get_channel_by_name(slack_client, channel):
     Returns the channel ID from the name.
     '''
     response = slack_client.api_call(
-        'channels.list'
+        'channels.list',
+        exclude_archived=True,
+        exclude_members=True
     )
     if not response['ok']:
         raise Exception(f'could not get channel response={response}')
@@ -144,6 +146,23 @@ def get_channel_by_name(slack_client, channel):
             return ch['id']
 
     raise Exception(f'could not find channel response={response}')
+
+@lru_cache()
+def get_user_by_name(slack_client, user):
+    '''
+    Returns the user ID from name.
+    '''
+    response = slack_client.api_call(
+        'users.list',
+        presence=False
+    )
+    if not response['ok']:
+        raise Exception(f'could not get user response={response}')
+    for usr in response['members']:
+        if usr['name'] == user:
+            return usr['id']
+
+    raise Exception(f'could not find user response={response}')
 
 def get_self(slack_client):
     '''
