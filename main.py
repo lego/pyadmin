@@ -33,6 +33,13 @@ def prune_listening():
         del listening[expired_event]
 
 
+def ping_slack():
+    '''
+    Pings slack through rtm.
+    '''
+    response = slack_client.server.ping()
+    logging.info(f'response={response}')
+
 def process_events(events):
     '''
     For each event we filter to reactions and messages
@@ -82,6 +89,7 @@ def process_events(events):
 if __name__ == '__main__':
     configure_logging()
     schedule.every().hour.do(prune_listening)
+    schedule.every().minute.do(ping_slack)
     slack_client = SlackClient(SLACK_TOKEN)
     ME = get_self(slack_client)
     post_dm(slack_client, ADMIN, 'Hello!')
