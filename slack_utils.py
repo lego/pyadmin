@@ -7,9 +7,13 @@ import logging
 import re
 from enum import Enum, auto
 from functools import lru_cache
+from typing import Tuple, Any, List, Dict, NewType
 
 from config import CHANNEL
 
+Channel = NewType('Channel', str)
+User = NewType('User', str)
+EventId = NewType('EventId', str)
 
 class ArgumentType(Enum):
     '''
@@ -24,7 +28,7 @@ class ArgumentType(Enum):
     INT = auto()
 
 
-def parse_channel(input_string):
+def parse_channel(input_string: str) -> Tuple[Any, bool]:
     '''
     Input format: <#C052EM50K|waterloo>
     '''
@@ -34,7 +38,7 @@ def parse_channel(input_string):
     return (ArgumentType.CHANNEL, match.group('id')), True
 
 
-def parse_user(input_string):
+def parse_user(input_string: str) -> Tuple[Any, bool]:
     '''
     Input format: <@U088EGWEL>
     '''
@@ -44,7 +48,7 @@ def parse_user(input_string):
     return (ArgumentType.USER, match.group('id')), True
 
 
-def parse_email(input_string):
+def parse_email(input_string: str) -> Tuple[Any, bool]:
     '''
     Input format: <mailto:tsohlson@gmail.com|tsohlson@gmail.com>
     '''
@@ -54,7 +58,7 @@ def parse_email(input_string):
     return (ArgumentType.EMAIL, match.group('email')), True
 
 
-def parse_command(input_string):
+def parse_command(input_string: str) -> Tuple[Any, bool]:
     '''
     Input format: $rename. Only accepts commands which are votable.
     '''
@@ -64,7 +68,7 @@ def parse_command(input_string):
     return None, False
 
 
-def parse_int(input_string):
+def parse_int(input_string: str) -> Tuple[Any, bool]:
     '''
     Input format: 5
     '''
@@ -74,19 +78,19 @@ def parse_int(input_string):
         return None, False
 
 
-def parse_arguments(args):
+def parse_arguments(args: List[str]) -> Tuple[List[ArgumentType], List[str]]:
     '''
     Given a list of strings we parse each one and output two lists.
     The first list contains the types e.g. string, channel, user, email
     The second list contains the values e.g. pickle, C052EM50K, U088EGWEL, tsohlson@gmail.com
     '''
     logging.info(f'args={args}')
-    typs = []
-    vals = []
+    typs: List[ArgumentType] = []
+    vals: List[str] = []
     for arg in args:
         # The string type is the most lenient so we default to that.
-        typ = ArgumentType.STRING
-        val = arg
+        typ: ArgumentType = ArgumentType.STRING
+        val: str = arg
         for parse in [parse_channel, parse_user, parse_email, parse_command, parse_int]:
             res, match = parse(arg)
             if match:
@@ -97,7 +101,7 @@ def parse_arguments(args):
     return typs, vals
 
 
-def get_id(event):
+def get_id(event: Dict) -> EventId:
     '''
     Returns the ID for an event given an event with a ts key and a
     channel key.
@@ -105,14 +109,14 @@ def get_id(event):
     return event['channel'] + event['ts']
 
 
-def get_reaction_sum(event):
+def get_reaction_sum(event: Dict) -> int:
     '''
     Returns the number of thumbs up - the number of thumbs down given
     an event with a message key which has a reaction key.
     '''
     logging.info(f'event={event}')
-    up_votes = 0
-    down_votes = 0
+    up_votes: int = 0
+    down_votes: int = 0
     for reaction in event['message']['reactions']:
         if reaction['name'] == '+1':
             up_votes += reaction['count']
@@ -121,7 +125,7 @@ def get_reaction_sum(event):
     return up_votes - down_votes
 
 
-def post_message(slack_client, channel, text):
+def post_message(slack_client, channel: Channel, text: str) -> Dict:
     '''
     Simple wrapper around slack_client.api_call('chat.postMessage'...).
     '''
@@ -136,7 +140,7 @@ def post_message(slack_client, channel, text):
     return response
 
 
-def post_dm(slack_client, user_name, text):
+def post_dm(slack_client, user_name: str, text: str) -> Dict:
     '''
     Takes a user name (e.g. tristan) and sends them a message.
     '''
@@ -144,13 +148,13 @@ def post_dm(slack_client, user_name, text):
     response = slack_client.api_call('im.open', user=usr)
     if not response['ok']:
         logging.warning(f'response={response}')
-        return
+        raise Exception(f'could not post dm response={response}')
 
     return post_message(slack_client, response['channel']['id'], text)
 
 
 @lru_cache()
-def get_channel_by_name(slack_client, channel):
+def get_channel_by_name(slack_client, channel_name: str) -> Channel:
     '''
     Returns the channel ID from the name.
     '''
@@ -158,14 +162,14 @@ def get_channel_by_name(slack_client, channel):
     if not response['ok']:
         raise Exception(f'could not get channel response={response}')
     for ch in response['channels']:
-        if ch['name'] == channel:
+        if ch['name'] == channel_name:
             return ch['id']
 
     raise Exception(f'could not find channel response={response}')
 
 
 @lru_cache()
-def get_user_by_name(slack_client, user):
+def get_user_by_name(slack_client, user_name: str) -> User:
     '''
     Returns the user ID from name.
     '''
@@ -173,14 +177,14 @@ def get_user_by_name(slack_client, user):
     if not response['ok']:
         raise Exception(f'could not get user response={response}')
     for usr in response['members']:
-        if usr['name'] == user:
+        if usr['name'] == user_name:
             return usr['id']
 
     raise Exception(f'could not find user response={response}')
 
 
 @lru_cache()
-def is_bot(slack_client, user):
+def is_bot(slack_client, user: User) -> bool:
     '''
     Takes a user ID and returns true if the user is a bot.
     '''
@@ -190,11 +194,12 @@ def is_bot(slack_client, user):
     response = slack_client.api_call('users.info', user=user)
     if not response['ok']:
         logging.warning(f'response={response}')
-        return
+        return False
 
     return response.get('user', {}).get('is_bot', False)
 
-def get_self(slack_client):
+
+def get_self(slack_client) -> User:
     '''
     Uses auth.test to get the current user id.
     '''
@@ -214,6 +219,7 @@ def delete_message(slack_client, event):
     if channel != get_channel_by_name(slack_client, CHANNEL):
         return
 
-    response = slack_client.api_call('chat.delete', ts=event['ts'], channel=channel)
+    response = slack_client.api_call(
+        'chat.delete', ts=event['ts'], channel=channel)
     if not response['ok']:
         logging.warning(f'response={response}')

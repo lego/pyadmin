@@ -7,15 +7,16 @@ looks decent to me.
 
 import logging
 import time
-from commands import COMMANDS, listening, handler
+from commands import COMMANDS, handler, listening
 
 import schedule
 from slackclient import SlackClient
 
 from config import (ADMIN, MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME,
                     configure_logging)
-from slack_utils import (delete_message, get_id, get_self, parse_arguments,
-                         post_dm, is_bot)
+from slack_utils import (EventId, User, delete_message, get_channel_by_name,
+                         get_id, get_self, get_user_by_name, is_bot,
+                         parse_arguments, post_dm)
 
 
 def prune_listening():
@@ -39,6 +40,15 @@ def ping_slack():
     slack_client.server.ping()
 
 
+def expire_cache():
+    '''
+    Expires cached slack information.
+    '''
+    get_channel_by_name.cache_clear()
+    get_user_by_name.cache_clear()
+    is_bot.cache_clear()
+
+
 def process_events(events):
     '''
     For each event we filter to reactions and messages
@@ -59,7 +69,7 @@ def process_events(events):
                 break
 
             # We only care about messages from other users.
-            if  event['user'] == ME:
+            if event['user'] == ME:
                 break
 
             # Ignore bot users.
@@ -80,7 +90,7 @@ def process_events(events):
             if command.args == typs:
                 try:
                     handler(command, event, vals, slack_client)
-                except Exception:
+                except:
                     logging.exception('exception encountered running command')
             else:
                 # Not a valid command and in CHANNEL? Delete!
@@ -88,18 +98,20 @@ def process_events(events):
         elif event_type == 'reaction_added':
             item = event['item']
             if 'channel' in item and 'ts' in item:
-                event_id = get_id(event['item'])
-                if listening.get(event_id, {'fn': lambda: None})['fn']():
-                    del listening[event_id]
+                event_id: EventId = get_id(event['item'])
+                if event_id in listening:
+                    if listening[event_id].fn():
+                        del listening[event_id]
 
 
 if __name__ == '__main__':
     configure_logging()
     schedule.every().hour.do(prune_listening)
     schedule.every().minute.do(ping_slack)
+    schedule.every().hour.do(expire_cache)
     slack_client = SlackClient(SLACK_TOKEN)
-    ME = get_self(slack_client)
-    post_dm(slack_client, ADMIN, 'Hello!')
+    ME: User = get_self(slack_client)
+    post_dm(slack_client, ADMIN, 'I have awoken.')
 
     if slack_client.rtm_connect():
         logging.info('connected')

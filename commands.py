@@ -7,17 +7,22 @@ import os
 import sys
 import time
 from functools import singledispatch
-from typing import Callable, List, NamedTuple
+from typing import Callable, Dict, List, NamedTuple, Union
 
 import git
 
 from config import ADMIN, CHANNEL
-from slack_utils import (ArgumentType, delete_message, get_channel_by_name,
-                         get_id, get_reaction_sum, get_user_by_name,
-                         post_message)
+from slack_utils import (ArgumentType, Channel, EventId, delete_message,
+                         get_channel_by_name, get_id, get_reaction_sum,
+                         get_user_by_name, post_message)
 from store import get_value, set_value
 
-listening = {}
+ListeningEvent = NamedTuple('ListeningEvent', [
+    ('ts', float),
+    ('fn', Callable[[], bool])
+])
+
+listening: Dict[EventId, ListeningEvent] = {}
 
 SyncCommand = NamedTuple('SyncCommand', [
     ('args', List[ArgumentType]),
@@ -38,15 +43,15 @@ VoteCommand = NamedTuple('VoteCommand', [
 
 
 @singledispatch
-def handler(command: VoteCommand, event, args, slack_client):
+def handler(command: VoteCommand, event, args: List[str], slack_client):
     '''
     Handles vote based commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
 
     # Filter to only the CHANNEL channel.
-    channel_id = get_channel_by_name(slack_client, CHANNEL)
-    if event.get('channel', None) != channel_id:
+    voting_channel = get_channel_by_name(slack_client, CHANNEL)
+    if event.get('channel', None) != voting_channel:
         return
 
     channel = event['channel']
@@ -57,7 +62,7 @@ def handler(command: VoteCommand, event, args, slack_client):
         command.message(args) + f' {votes_required} votes required.'
     )
 
-    def handler():
+    def _handler() -> bool:
         reactions = slack_client.api_call(
             'reactions.get',
             channel=response['channel'],
@@ -71,11 +76,11 @@ def handler(command: VoteCommand, event, args, slack_client):
         else:
             return False
 
-    listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
+    listening[get_id(response)] = ListeningEvent(time.time(), _handler)
 
 
 @handler.register(SyncCommand)
-def _(command: SyncCommand, event, args, slack_client):
+def _(command: SyncCommand, event, args: List[str], slack_client):
     '''
     Handlers synchronous commands.
     '''
@@ -84,7 +89,7 @@ def _(command: SyncCommand, event, args, slack_client):
 
 
 @handler.register(AdminCommand)
-def __(command: AdminCommand, event, args, slack_client):
+def __(command: AdminCommand, event, args: List[str], slack_client):
     '''
     Handles admin level commands.
     '''
@@ -95,16 +100,17 @@ def __(command: AdminCommand, event, args, slack_client):
         delete_message(slack_client, event)
 
 
-def vote_fn(slack_client, channel, args):
+def vote_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Changes the number of votes required.
     '''
-    set_value(COMMANDS[args[0]]['key'], args[1])
-    post_message(slack_client, channel,
-                 f'Changed `{args[0]}` to require {args[1]} votes.')
+    command = COMMANDS[args[0]]
+    if isinstance(command, VoteCommand):
+        set_value(command.key, args[1])
+        post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
 
 
-def rename_fn(slack_client, channel, args):
+def rename_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Changes the name of a channel.
     '''
@@ -123,7 +129,7 @@ def rename_fn(slack_client, channel, args):
                      f'Renamed <#{args[0]}> to {args[1]}.')
 
 
-def kick_fn(slack_client, channel, args):
+def kick_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Kicks a user from a channel.
     '''
@@ -141,7 +147,7 @@ def kick_fn(slack_client, channel, args):
                      f'Kicked <@{args[0]}> from <#{args[1]}>.')
 
 
-def invite_fn(slack_client, channel, args):
+def invite_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Invites a user to this slack.
     '''
@@ -158,7 +164,7 @@ def invite_fn(slack_client, channel, args):
                      f'Invited <mailto:{args[0]}> to this slack.')
 
 
-def help_fn(slack_client, channel, args):
+def help_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Outputs a help message.
     '''
@@ -168,7 +174,7 @@ def help_fn(slack_client, channel, args):
         for arg in val.args:
             line += f" <{arg.name}>"
         line = line.ljust(35)
-        if 'key' in val:
+        if isinstance(val, VoteCommand):
             votes_required = get_value(val.key)
             line += f' {votes_required} votes required.'
         help_message += line
@@ -177,21 +183,21 @@ def help_fn(slack_client, channel, args):
     post_message(slack_client, channel, help_message)
 
 
-def pong_fn(slack_client, channel, args):
+def pong_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Outputs a pong.
     '''
     post_message(slack_client, channel, 'pong')
 
 
-def update_fn(slack_client, channel, args):
+def update_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Pulls from git and reloads the process.
     '''
     g = git.cmd.Git('.')
     try:
         g.pull()
-    except Exception:
+    except:
         post_message(slack_client, channel, f'Could not git pull.')
         return
 
@@ -199,10 +205,18 @@ def update_fn(slack_client, channel, args):
     os.execl(sys.executable, *([sys.executable] + sys.argv))
 
 
-COMMANDS = {
-    '.update': SyncCommand([], update_fn),
+def intersect_fn(slack_client, channel: Channel, args: List[str]):
+    '''
+    Gets the intersection of two channels users and pings them.
+    '''
+    # TODO: implement
+    pass
+
+COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
+    '.update': AdminCommand([], update_fn),
     '.help': SyncCommand([], help_fn),
     '.ping': SyncCommand([], pong_fn),
+    # '.intersection': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
     '.vote': VoteCommand(
         [ArgumentType.COMMAND, ArgumentType.INT],
         vote_fn,
