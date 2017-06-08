@@ -58,6 +58,10 @@ def process_events(events):
             if 'user' not in event or event['user'] == ME:
                 break
 
+            # We ignore slackbot.
+            if 'user' == 'USLACKBOT':
+                break
+
             # See if it's a valid command.
             argv = event['text'].split()
             if argv[0] not in COMMANDS:
