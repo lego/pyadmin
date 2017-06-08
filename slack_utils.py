@@ -179,6 +179,21 @@ def get_user_by_name(slack_client, user):
     raise Exception(f'could not find user response={response}')
 
 
+@lru_cache()
+def is_bot(slack_client, user):
+    '''
+    Takes a user ID and returns true if the user is a bot.
+    '''
+    if user == 'USLACKBOT':
+        return True
+
+    response = slack_client.api_call('users.info', user=user)
+    if not response['ok']:
+        logging.warning(f'response={response}')
+        return
+
+    return response['is_bot']
+
 def get_self(slack_client):
     '''
     Uses auth.test to get the current user id.

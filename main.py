@@ -15,7 +15,7 @@ from slackclient import SlackClient
 from config import (ADMIN, MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME,
                     configure_logging)
 from slack_utils import (delete_message, get_id, get_self, parse_arguments,
-                         post_dm)
+                         post_dm, is_bot)
 
 
 def prune_listening():
@@ -54,12 +54,16 @@ def process_events(events):
             if 'thread_ts' in event:
                 break
 
-            # We only care about messages from other users.
-            if 'user' not in event or event['user'] == ME:
+            # Sometimes this isn't here apparently.
+            if 'user' not in event:
                 break
 
-            # We ignore slackbot.
-            if 'user' == 'USLACKBOT':
+            # We only care about messages from other users.
+            if  event['user'] == ME:
+                break
+
+            # Ignore bot users.
+            if is_bot(slack_client, event['user']):
                 break
 
             # See if it's a valid command.
