@@ -173,8 +173,8 @@ def help_fn(slack_client, channel: Channel, args: List[str]):
         line = f"\n  – {key}"
         for arg in val.args:
             line += f" <{arg.name}>"
-        line = line.ljust(35)
         if isinstance(val, VoteCommand):
+            line = line.ljust(35)
             votes_required = get_value(val.key)
             line += f' {votes_required} votes required.'
         help_message += line
