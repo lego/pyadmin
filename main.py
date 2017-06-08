@@ -55,7 +55,7 @@ def process_events(events):
                 break
 
             # We only care about messages from other users.
-            if event['user'] == ME:
+            if 'user' not in event or event['user'] == ME:
                 break
 
             # See if it's a valid command.
