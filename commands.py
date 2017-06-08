@@ -6,6 +6,8 @@ import logging
 import os
 import sys
 import time
+from functools import singledispatch
+from typing import Callable, List, NamedTuple
 
 import git
 
@@ -17,8 +19,26 @@ from store import get_value, set_value
 
 listening = {}
 
+SyncCommand = NamedTuple('SyncCommand', [
+    ('args', List[ArgumentType]),
+    ('fn', Callable),
+])
 
-def vote_handler(slack_client, event, args, command):
+AdminCommand = NamedTuple('AdminCommand', [
+    ('args', List[ArgumentType]),
+    ('fn', Callable),
+])
+
+VoteCommand = NamedTuple('VoteCommand', [
+    ('args', List[ArgumentType]),
+    ('fn', Callable),
+    ('message', Callable),
+    ('key', str)
+])
+
+
+@singledispatch
+def handler(command: VoteCommand, event, args, slack_client):
     '''
     Handles vote based commands.
     '''
@@ -30,11 +50,11 @@ def vote_handler(slack_client, event, args, command):
         return
 
     channel = event['channel']
-    votes_required = get_value(command['key'])
+    votes_required = get_value(command.key)
     response = post_message(
         slack_client,
         channel,
-        command['message'](args) + f' {votes_required} votes required.'
+        command.message(args) + f' {votes_required} votes required.'
     )
 
     def handler():
@@ -46,7 +66,7 @@ def vote_handler(slack_client, event, args, command):
         )
         current_votes = get_reaction_sum(reactions)
         if current_votes >= votes_required:
-            command['fn'](slack_client, channel, args)
+            command.fn(slack_client, channel, args)
             return True
         else:
             return False
@@ -54,21 +74,23 @@ def vote_handler(slack_client, event, args, command):
     listening[get_id(response)] = {'ts': time.time(), 'fn': handler}
 
 
-def synchronous_handler(slack_client, event, args, command):
+@handler.register(SyncCommand)
+def _(command: SyncCommand, event, args, slack_client):
     '''
     Handlers synchronous commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
-    command['fn'](slack_client, event['channel'], args)
+    command.fn(slack_client, event['channel'], args)
 
 
-def admin_handler(slack_client, event, args, command):
+@handler.register(AdminCommand)
+def __(command: AdminCommand, event, args, slack_client):
     '''
     Handles admin level commands.
     '''
     logging.info(f'event={event}, args={args}, command={command}')
     if event['user'] == get_user_by_name(slack_client, ADMIN):
-        command['fn'](slack_client, event['channel'], args)
+        command.fn(slack_client, event['channel'], args)
     else:
         delete_message(slack_client, event)
 
@@ -78,7 +100,8 @@ def vote_fn(slack_client, channel, args):
     Changes the number of votes required.
     '''
     set_value(COMMANDS[args[0]]['key'], args[1])
-    post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
+    post_message(slack_client, channel,
+                 f'Changed `{args[0]}` to require {args[1]} votes.')
 
 
 def rename_fn(slack_client, channel, args):
@@ -93,9 +116,11 @@ def rename_fn(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not rename channel response={response}')
-        post_message(slack_client, channel, f'Could not rename <#{args[0]}> to {args[1]}.')
+        post_message(slack_client, channel,
+                     f'Could not rename <#{args[0]}> to {args[1]}.')
     else:
-        post_message(slack_client, channel, f'Renamed <#{args[0]}> to {args[1]}.')
+        post_message(slack_client, channel,
+                     f'Renamed <#{args[0]}> to {args[1]}.')
 
 
 def kick_fn(slack_client, channel, args):
@@ -109,9 +134,11 @@ def kick_fn(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not kick user response={response}')
-        post_message(slack_client, channel, f'Could not kick <@{args[0]}> from <#{args[1]}>.')
+        post_message(slack_client, channel,
+                     f'Could not kick <@{args[0]}> from <#{args[1]}>.')
     else:
-        post_message(slack_client, channel, f'Kicked <@{args[0]}> from <#{args[1]}>.')
+        post_message(slack_client, channel,
+                     f'Kicked <@{args[0]}> from <#{args[1]}>.')
 
 
 def invite_fn(slack_client, channel, args):
@@ -124,9 +151,11 @@ def invite_fn(slack_client, channel, args):
     )
     if not response['ok']:
         logging.warning(f'could not invite user response={response}')
-        post_message(slack_client, channel, f'Could not invite <mailto:{args[0]}> to this slack.')
+        post_message(slack_client, channel,
+                     f'Could not invite <mailto:{args[0]}> to this slack.')
     else:
-        post_message(slack_client, channel, f'Invited <mailto:{args[0]}> to this slack.')
+        post_message(slack_client, channel,
+                     f'Invited <mailto:{args[0]}> to this slack.')
 
 
 def help_fn(slack_client, channel, args):
@@ -171,47 +200,31 @@ def update_fn(slack_client, channel, args):
 
 
 COMMANDS = {
-    '$update': {
-        'args': [],
-        'handler': admin_handler,
-        'fn': update_fn
-    },
-    '$help': {
-        'args': [],
-        'handler': synchronous_handler,
-        'fn': help_fn
-    },
-    '$ping': {
-        'args': [],
-        'handler': synchronous_handler,
-        'fn': pong_fn
-    },
-    '$vote': {
-        'args': [ArgumentType.COMMAND, ArgumentType.INT],
-        'handler': vote_handler,
-        'fn': vote_fn,
-        'message': lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
-        'key': 'vote'
-    },
-    '$rename': {
-        'args': [ArgumentType.CHANNEL, ArgumentType.STRING],
-        'handler': vote_handler,
-        'fn': rename_fn,
-        'message': lambda args: f'Rename <#{args[0]}> to {args[1]}?',
-        'key': 'rename'
-    },
-    '$kick': {
-        'args': [ArgumentType.USER, ArgumentType.CHANNEL],
-        'handler': vote_handler,
-        'fn': kick_fn,
-        'message': lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
-        'key': 'kick'
-    },
-    '$invite': {
-        'args': [ArgumentType.EMAIL],
-        'handler': vote_handler,
-        'fn': invite_fn,
-        'message': lambda args: f'Invite <mailto:{args[0]}> to this slack?',
-        'key': 'invite'
-    },
+    '.update': SyncCommand([], update_fn),
+    '.help': SyncCommand([], help_fn),
+    '.ping': SyncCommand([], pong_fn),
+    '.vote': VoteCommand(
+        [ArgumentType.COMMAND, ArgumentType.INT],
+        vote_fn,
+        lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
+        'vote'
+    ),
+    '.rename': VoteCommand(
+        [ArgumentType.CHANNEL, ArgumentType.STRING],
+        rename_fn,
+        lambda args: lambda args: f'Rename <#{args[0]}> to {args[1]}?',
+        'rename'
+    ),
+    '.kick': VoteCommand(
+        [ArgumentType.USER, ArgumentType.CHANNEL],
+        kick_fn,
+        lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
+        'kick'
+    ),
+    '.invite': VoteCommand(
+        [ArgumentType.EMAIL],
+        invite_fn,
+        lambda args: lambda args: f'Invite <mailto:{args[0]}> to this slack?',
+        'invite'
+    ),
 }

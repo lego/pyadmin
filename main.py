@@ -7,7 +7,7 @@ looks decent to me.
 
 import logging
 import time
-from commands import COMMANDS, listening
+from commands import COMMANDS, listening, handler
 
 import schedule
 from slackclient import SlackClient
@@ -55,8 +55,8 @@ def process_events(events):
                 break
 
             # We only care about messages from other users.
-            if event['user'] == ME:
-                break
+            # if event['user'] == ME:
+            #     break
 
             # See if it's a valid command.
             argv = event['text'].split()
@@ -69,9 +69,9 @@ def process_events(events):
             typs, vals = parse_arguments(argv[1:])
             logging.info(f'argv={argv} parse_types={typs} parse_values={vals}')
 
-            if command['args'] == typs:
+            if command.args == typs:
                 try:
-                    command['handler'](slack_client, event, vals, command)
+                    handler(command, event, vals, slack_client)
                 except Exception:
                     logging.exception('exception encountered running command')
             else:
