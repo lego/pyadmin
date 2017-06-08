@@ -55,8 +55,8 @@ def process_events(events):
                 break
 
             # We only care about messages from other users.
-            # if event['user'] == ME:
-            #     break
+            if event['user'] == ME:
+                break
 
             # See if it's a valid command.
             argv = event['text'].split()
