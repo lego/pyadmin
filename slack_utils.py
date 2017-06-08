@@ -192,10 +192,7 @@ def is_bot(slack_client, user):
         logging.warning(f'response={response}')
         return
 
-    if 'is_bot' not in response:
-        return False
-
-    return response['is_bot']
+    return response.get('user', {}).get('is_bot', False)
 
 def get_self(slack_client):
     '''
