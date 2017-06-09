@@ -216,6 +216,8 @@ def intersect_fn(slack_client, channel: Channel, args: List[str]):
     for user in users.intersection(sresu):
         if is_active_and_human(slack_client, user):
             line += f'<@{user}> '
+    if line == '':
+        line = 'No intersection.'
 
     post_message(slack_client, channel, line)
 
