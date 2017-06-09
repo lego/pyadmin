@@ -14,7 +14,8 @@ import git
 from config import ADMIN, CHANNEL
 from slack_utils import (ArgumentType, Channel, EventId, delete_message,
                          get_channel_by_name, get_id, get_reaction_sum,
-                         get_user_by_name, post_message, get_users_in_channel, is_active_and_human)
+                         get_user_by_name, get_users_in_channel,
+                         is_active_and_human, post_message)
 from store import get_value, set_value
 
 ListeningEvent = NamedTuple('ListeningEvent', [
@@ -37,7 +38,7 @@ AdminCommand = NamedTuple('AdminCommand', [
 VoteCommand = NamedTuple('VoteCommand', [
     ('args', List[ArgumentType]),
     ('fn', Callable),
-    ('message', Callable),
+    ('message', Callable[[List[str]], str]),
     ('key', str)
 ])
 
@@ -59,7 +60,7 @@ def handler(command: VoteCommand, event, args: List[str], slack_client):
     response = post_message(
         slack_client,
         channel,
-        f'{command.message(args)()} {votes_required} votes required.'
+        f'{command.message(args)} {votes_required} votes required.'
     )
 
     def _handler() -> bool:
@@ -107,7 +108,8 @@ def vote_fn(slack_client, channel: Channel, args: List[str]):
     command = COMMANDS[args[0]]
     if isinstance(command, VoteCommand):
         set_value(command.key, args[1])
-        post_message(slack_client, channel, f'Changed `{args[0]}` to require {args[1]} votes.')
+        post_message(slack_client, channel,
+                     f'Changed `{args[0]}` to require {args[1]} votes.')
 
 
 def rename_fn(slack_client, channel: Channel, args: List[str]):
@@ -221,6 +223,7 @@ def intersect_fn(slack_client, channel: Channel, args: List[str]):
 
     post_message(slack_client, channel, line)
 
+
 COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
     '.help': SyncCommand([], help_fn),
     '.ping': SyncCommand([], pong_fn),
@@ -235,7 +238,7 @@ COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
     '.rename': VoteCommand(
         [ArgumentType.CHANNEL, ArgumentType.STRING],
         rename_fn,
-        lambda args: lambda args: f'Rename <#{args[0]}> to {args[1]}?',
+        lambda args: f'Rename <#{args[0]}> to {args[1]}?',
         'rename'
     ),
     '.kick': VoteCommand(
@@ -247,7 +250,7 @@ COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
     '.invite': VoteCommand(
         [ArgumentType.EMAIL],
         invite_fn,
-        lambda args: lambda args: f'Invite <mailto:{args[0]}> to this slack?',
+        lambda args: f'Invite <mailto:{args[0]}> to this slack?',
         'invite'
     ),
 }
