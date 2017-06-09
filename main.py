@@ -47,7 +47,6 @@ def expire_cache():
     '''
     get_channel_by_name.cache_clear()
     get_user_by_name.cache_clear()
-    is_bot.cache_clear()
     get_users_in_channel.cache_clear()
 
 
@@ -110,10 +109,13 @@ def process_events(events):
 
 if __name__ == '__main__':
     configure_logging()
+
     schedule.every().hour.do(prune_listening)
     schedule.every().minute.do(ping_slack)
     schedule.every().hour.do(expire_cache)
+
     slack_client = SlackClient(SLACK_TOKEN)
+
     ME: User = get_self(slack_client)
     post_dm(slack_client, ADMIN, 'I have awoken.')
 

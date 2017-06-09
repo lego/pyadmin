@@ -203,6 +203,23 @@ def get_users_in_channel(slack_client, channel: Channel) -> Set[User]:
 
 
 @lru_cache()
+def is_active_and_human(slack_client, user: User) -> bool:
+    '''
+    Returns true if the user is active and human.
+    '''
+    response = slack_client.api_call('users.info', user=user)
+    if not response['ok']:
+        raise ApiCallException(response)
+
+    if response.get('deleted', False):
+        return False
+
+    if response.get('is_bot', False):
+        return False
+
+    return True
+
+@lru_cache()
 def is_bot(slack_client, user: User) -> bool:
     '''
     Takes a user ID and returns true if the user is a bot.

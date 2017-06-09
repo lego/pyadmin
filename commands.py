@@ -14,7 +14,7 @@ import git
 from config import ADMIN, CHANNEL
 from slack_utils import (ArgumentType, Channel, EventId, delete_message,
                          get_channel_by_name, get_id, get_reaction_sum,
-                         get_user_by_name, post_message, get_users_in_channel)
+                         get_user_by_name, post_message, get_users_in_channel, is_active_and_human)
 from store import get_value, set_value
 
 ListeningEvent = NamedTuple('ListeningEvent', [
@@ -210,11 +210,12 @@ def intersect_fn(slack_client, channel: Channel, args: List[str]):
     Gets the intersection of two channels users and pings them.
     '''
     users = get_users_in_channel(slack_client, args[0])
-    users |= get_users_in_channel(slack_client, args[1])
+    sresu = get_users_in_channel(slack_client, args[1])
 
     line = ''
-    for user in users:
-        line += f'<@{user}> '
+    for user in users.intersection(sresu):
+        if is_active_and_human(slack_client, user):
+            line += f'<@{user}> '
 
     post_message(slack_client, channel, line)
 
@@ -222,7 +223,7 @@ COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
     '.help': SyncCommand([], help_fn),
     '.ping': SyncCommand([], pong_fn),
     '.update': AdminCommand([], update_fn),
-    '.intersection': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
+    '.intersect': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
     '.vote': VoteCommand(
         [ArgumentType.COMMAND, ArgumentType.INT],
         vote_fn,
