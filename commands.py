@@ -59,7 +59,7 @@ def handler(command: VoteCommand, event, args: List[str], slack_client):
     response = post_message(
         slack_client,
         channel,
-        command.message(args) + f' {votes_required} votes required.'
+        f'{command.message(args)} {votes_required} votes required.'
     )
 
     def _handler() -> bool:
