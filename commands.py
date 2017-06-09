@@ -219,9 +219,9 @@ def intersect_fn(slack_client, channel: Channel, args: List[str]):
     post_message(slack_client, channel, line)
 
 COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
-    '.update': AdminCommand([], update_fn),
     '.help': SyncCommand([], help_fn),
     '.ping': SyncCommand([], pong_fn),
+    '.update': AdminCommand([], update_fn),
     '.intersection': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
     '.vote': VoteCommand(
         [ArgumentType.COMMAND, ArgumentType.INT],

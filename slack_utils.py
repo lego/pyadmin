@@ -195,7 +195,7 @@ def get_users_in_channel(slack_client, channel: Channel) -> Set[User]:
     '''
     Returns a list of the users in a channel.
     '''
-    response = slack_client.api_call('channels.', channel=channel)
+    response = slack_client.api_call('channels.info', channel=channel)
     if not response['ok']:
         raise ApiCallException(response)
 
