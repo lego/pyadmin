@@ -211,10 +211,10 @@ def is_active_and_human(slack_client, user: User) -> bool:
     if not response['ok']:
         raise ApiCallException(response)
 
-    if response.get('deleted', False):
+    if response.get('user', {}).get('deleted', False):
         return False
 
-    if response.get('is_bot', False):
+    if response.get('user', {}).get('is_bot', False):
         return False
 
     return True
