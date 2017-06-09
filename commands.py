@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import time
+import typing
 from functools import singledispatch
 from typing import Callable, Dict, List, NamedTuple, Union
 
@@ -117,7 +118,7 @@ def rename_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Changes the name of a channel.
     '''
-    channel_id = args[0]
+    channel_id = typing.cast(Channel, args[0])
     new_name = args[1]
     original_name = get_channel_name(slack_client, channel_id)
 
