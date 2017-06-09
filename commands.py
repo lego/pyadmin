@@ -119,7 +119,7 @@ def rename_fn(slack_client, channel: Channel, args: List[str]):
     '''
     channel_id = args[0]
     new_name = args[1]
-    original_name = get_channel_name(slack_client, channel)
+    original_name = get_channel_name(slack_client, channel_id)
 
     response = slack_client.api_call(
         'channels.rename',
@@ -133,7 +133,7 @@ def rename_fn(slack_client, channel: Channel, args: List[str]):
                      f'Could not rename <#{channel_id}> to {new_name}.')
     else:
         post_message(slack_client, channel,
-                     f'Renamed <#{channel_id}> from {original_name} to {new_name}.')
+                     f'Renamed <#{channel_id}> from #{original_name} to {new_name}.')
 
 
 def kick_fn(slack_client, channel: Channel, args: List[str]):
