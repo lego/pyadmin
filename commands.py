@@ -14,7 +14,7 @@ import git
 from config import ADMIN, CHANNEL
 from slack_utils import (ArgumentType, Channel, EventId, delete_message,
                          get_channel_by_name, get_id, get_reaction_sum,
-                         get_user_by_name, post_message)
+                         get_user_by_name, post_message, get_users_in_channel)
 from store import get_value, set_value
 
 ListeningEvent = NamedTuple('ListeningEvent', [
@@ -170,7 +170,7 @@ def help_fn(slack_client, channel: Channel, args: List[str]):
     '''
     help_message = 'Actions are voted on using :+1: and :-1:. I support the following commands:```'
     for key, val in COMMANDS.items():
-        line = f"\n  – {key}"
+        line = f"\n– {key}"
         for arg in val.args:
             line += f" <{arg.name}>"
         if isinstance(val, VoteCommand):
@@ -209,14 +209,20 @@ def intersect_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Gets the intersection of two channels users and pings them.
     '''
-    # TODO: implement
-    pass
+    users = get_users_in_channel(slack_client, args[0])
+    users |= get_users_in_channel(slack_client, args[1])
+
+    line = ''
+    for user in users:
+        line += f'<@{user}> '
+
+    post_message(slack_client, channel, line)
 
 COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
     '.update': AdminCommand([], update_fn),
     '.help': SyncCommand([], help_fn),
     '.ping': SyncCommand([], pong_fn),
-    # '.intersection': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
+    '.intersection': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
     '.vote': VoteCommand(
         [ArgumentType.COMMAND, ArgumentType.INT],
         vote_fn,

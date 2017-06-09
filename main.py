@@ -14,8 +14,9 @@ from slackclient import SlackClient
 
 from config import (ADMIN, MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME,
                     configure_logging)
-from slack_utils import (EventId, User, delete_message, get_channel_by_name,
-                         get_id, get_self, get_user_by_name, is_bot,
+from slack_utils import (ApiCallException, EventId, User, delete_message,
+                         get_channel_by_name, get_id, get_self,
+                         get_user_by_name, get_users_in_channel, is_bot,
                          parse_arguments, post_dm)
 
 
@@ -47,6 +48,7 @@ def expire_cache():
     get_channel_by_name.cache_clear()
     get_user_by_name.cache_clear()
     is_bot.cache_clear()
+    get_users_in_channel.cache_clear()
 
 
 def process_events(events):
@@ -90,8 +92,10 @@ def process_events(events):
             if command.args == typs:
                 try:
                     handler(command, event, vals, slack_client)
+                except ApiCallException as e:
+                    logging.warning(e)
                 except:
-                    logging.exception('exception encountered running command')
+                    logging.exception('unhandled exception')
             else:
                 # Not a valid command and in CHANNEL? Delete!
                 delete_message(slack_client, event)

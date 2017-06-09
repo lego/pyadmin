@@ -7,13 +7,21 @@ import logging
 import re
 from enum import Enum, auto
 from functools import lru_cache
-from typing import Tuple, Any, List, Dict, NewType
+from typing import Any, Dict, List, NewType, Tuple, Set
 
 from config import CHANNEL
 
 Channel = NewType('Channel', str)
 User = NewType('User', str)
 EventId = NewType('EventId', str)
+
+
+class ApiCallException(Exception):
+    '''
+    Used when slack_client.api_call(...) fails.
+    '''
+    pass
+
 
 class ArgumentType(Enum):
     '''
@@ -136,7 +144,7 @@ def post_message(slack_client, channel: Channel, text: str) -> Dict:
         as_user=True
     )
     if not response['ok']:
-        raise Exception(f'could not post message response={response}')
+        raise ApiCallException(response)
     return response
 
 
@@ -147,8 +155,7 @@ def post_dm(slack_client, user_name: str, text: str) -> Dict:
     usr = get_user_by_name(slack_client, user_name)
     response = slack_client.api_call('im.open', user=usr)
     if not response['ok']:
-        logging.warning(f'response={response}')
-        raise Exception(f'could not post dm response={response}')
+        raise ApiCallException(response)
 
     return post_message(slack_client, response['channel']['id'], text)
 
@@ -160,12 +167,12 @@ def get_channel_by_name(slack_client, channel_name: str) -> Channel:
     '''
     response = slack_client.api_call('channels.list')
     if not response['ok']:
-        raise Exception(f'could not get channel response={response}')
+        raise ApiCallException(response)
     for ch in response['channels']:
         if ch['name'] == channel_name:
             return ch['id']
 
-    raise Exception(f'could not find channel response={response}')
+    raise ApiCallException(response)
 
 
 @lru_cache()
@@ -175,12 +182,24 @@ def get_user_by_name(slack_client, user_name: str) -> User:
     '''
     response = slack_client.api_call('users.list', presence=False)
     if not response['ok']:
-        raise Exception(f'could not get user response={response}')
+        raise ApiCallException(response)
     for usr in response['members']:
         if usr['name'] == user_name:
             return usr['id']
 
-    raise Exception(f'could not find user response={response}')
+    raise ApiCallException(response)
+
+
+@lru_cache()
+def get_users_in_channel(slack_client, channel: Channel) -> Set[User]:
+    '''
+    Returns a list of the users in a channel.
+    '''
+    response = slack_client.api_call('channels.', channel=channel)
+    if not response['ok']:
+        raise ApiCallException(response)
+
+    return set(response.get('channel', {}).get('members', []))
 
 
 @lru_cache()
@@ -193,6 +212,8 @@ def is_bot(slack_client, user: User) -> bool:
 
     response = slack_client.api_call('users.info', user=user)
     if not response['ok']:
+        # We don't raise an exception here since the caller of
+        # this method does not handle exceptions.
         logging.warning(f'response={response}')
         return False
 
@@ -205,7 +226,7 @@ def get_self(slack_client) -> User:
     '''
     response = slack_client.api_call('auth.test')
     if not response['ok']:
-        raise Exception(f'could not get self response={response}')
+        raise ApiCallException(response)
 
     return response['user_id']
 
@@ -220,6 +241,9 @@ def delete_message(slack_client, event):
         return
 
     response = slack_client.api_call(
-        'chat.delete', ts=event['ts'], channel=channel)
+        'chat.delete',
+        ts=event['ts'],
+        channel=channel
+    )
     if not response['ok']:
         logging.warning(f'response={response}')
