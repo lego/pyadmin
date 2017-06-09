@@ -13,9 +13,10 @@ import git
 
 from config import ADMIN, CHANNEL
 from slack_utils import (ArgumentType, Channel, EventId, delete_message,
-                         get_channel_by_name, get_id, get_reaction_sum,
-                         get_user_by_name, get_users_in_channel,
-                         is_active_and_human, post_message)
+                         get_channel_by_name, get_channel_name, get_id,
+                         get_reaction_sum, get_user_by_name,
+                         get_users_in_channel, is_active_and_human,
+                         post_message)
 from store import get_value, set_value
 
 ListeningEvent = NamedTuple('ListeningEvent', [
@@ -116,19 +117,23 @@ def rename_fn(slack_client, channel: Channel, args: List[str]):
     '''
     Changes the name of a channel.
     '''
+    channel_id = args[0]
+    new_name = args[1]
+    original_name = get_channel_name(slack_client, channel)
+
     response = slack_client.api_call(
         'channels.rename',
-        channel=args[0],
-        name=args[1].replace('#', ''),
+        channel=channel_id,
+        name=new_name.replace('#', ''),
         validate=True
     )
     if not response['ok']:
-        logging.warning(f'could not rename channel response={response}')
+        logging.warning(f'response={response}')
         post_message(slack_client, channel,
-                     f'Could not rename <#{args[0]}> to {args[1]}.')
+                     f'Could not rename <#{channel_id}> to {new_name}.')
     else:
         post_message(slack_client, channel,
-                     f'Renamed <#{args[0]}> to {args[1]}.')
+                     f'Renamed <#{channel_id}> from {original_name} to {new_name}.')
 
 
 def kick_fn(slack_client, channel: Channel, args: List[str]):

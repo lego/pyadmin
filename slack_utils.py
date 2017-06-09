@@ -175,6 +175,16 @@ def get_channel_by_name(slack_client, channel_name: str) -> Channel:
     raise ApiCallException(response)
 
 
+def get_channel_name(slack_client, channel: Channel) -> str:
+    '''
+    Returns the channel name for a given channel.
+    '''
+    response = slack_client.api_call('channels.info', channel=channel)
+    if not response['ok']:
+        raise ApiCallException(response)
+    return response['channel']['name']
+
+
 @lru_cache()
 def get_user_by_name(slack_client, user_name: str) -> User:
     '''
@@ -218,6 +228,7 @@ def is_active_and_human(slack_client, user: User) -> bool:
         return False
 
     return True
+
 
 @lru_cache()
 def is_bot(slack_client, user: User) -> bool:
