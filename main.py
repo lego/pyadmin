@@ -75,6 +75,7 @@ def process_events(events):
 
             # Ignore bot users.
             if is_bot(slack_client, event['user']):
+                delete_message(slack_client, event)
                 break
 
             # See if it's a valid command.
