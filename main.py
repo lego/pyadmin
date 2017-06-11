@@ -108,6 +108,16 @@ def process_events(events):
                         del listening[event_id]
 
 
+def run():
+    if slack_client.rtm_connect():
+        logging.info('connected')
+        while True:
+            process_events(slack_client.rtm_read())
+            schedule.run_pending()
+            time.sleep(SLEEP_TIME)
+    else:
+        logging.critical('connection failed, invalid token?')
+
 if __name__ == '__main__':
     configure_logging()
 
@@ -120,11 +130,9 @@ if __name__ == '__main__':
     ME: User = get_self(slack_client)
     post_dm(slack_client, ADMIN, 'I have awoken.')
 
-    if slack_client.rtm_connect():
-        logging.info('connected')
-        while True:
-            process_events(slack_client.rtm_read())
-            schedule.run_pending()
-            time.sleep(SLEEP_TIME)
-    else:
-        logging.critical('connection failed, invalid token?')
+    while True:
+        try:
+            run()
+        except:
+            logging.exception('unhandled exception')
+            time.sleep(20)
