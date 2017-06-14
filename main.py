@@ -28,7 +28,7 @@ def prune_listening():
     logging.info(f'listening={listening}')
     expired_events = []
     for key, val in listening.items():
-        if time.time() - val['ts'] > MAX_LISTENING:
+        if time.time() - val.ts > MAX_LISTENING:
             expired_events.append(key)
     for expired_event in expired_events:
         del listening[expired_event]
@@ -116,7 +116,7 @@ def run():
             schedule.run_pending()
             time.sleep(SLEEP_TIME)
     else:
-        logging.critical('connection failed, invalid token?')
+        raise Exception('connection failed')
 
 if __name__ == '__main__':
     configure_logging()
