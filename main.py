@@ -92,10 +92,8 @@ def process_events(events):
             if command.args == typs:
                 try:
                     handler(command, event, vals, slack_client)
-                except ApiCallException as e:
-                    logging.warning(e)
-                except:
-                    logging.exception('unhandled exception')
+                except ApiCallException as api_call_exception:
+                    logging.warning(api_call_exception)
             else:
                 # Not a valid command and in CHANNEL? Delete!
                 delete_message(slack_client, event)
@@ -109,6 +107,9 @@ def process_events(events):
 
 
 def run():
+    '''
+    Main event loop.
+    '''
     if slack_client.rtm_connect():
         logging.info('connected')
         while True:
@@ -117,6 +118,7 @@ def run():
             time.sleep(SLEEP_TIME)
     else:
         raise Exception('connection failed')
+
 
 if __name__ == '__main__':
     configure_logging()
@@ -128,10 +130,10 @@ if __name__ == '__main__':
     slack_client = SlackClient(SLACK_TOKEN)
 
     ME: User = get_self(slack_client)
-    post_dm(slack_client, ADMIN, 'I have awoken.')
 
     while True:
         try:
+            post_dm(slack_client, ADMIN, 'I have awoken.')
             run()
         except:
             logging.exception('unhandled exception')
