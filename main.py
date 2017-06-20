@@ -82,7 +82,7 @@ def process_events(events):
             argv = event['text'].split()
 
             # Sometimes there's nothing here. Unsure what's up with that.
-            if argv.empty():
+            if not argv:
                 delete_message(slack_client, event)
                 break
 
