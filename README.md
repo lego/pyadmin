@@ -23,6 +23,7 @@ def configure_logging():
     logging.basicConfig(filename=f'logs/{datetime.now()}.log', level=logging.DEBUG, format=FORMAT)
 
 CHANNEL = 'admin'
+UPDATE_CHANNEL = 'admin-updates'
 ADMIN = 'tristan'
 FORMAT = "[%(asctime)s] [%(levelname)-8s] [%(funcName)-16s] [%(message)s]"
 DB = 'db'

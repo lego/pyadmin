@@ -12,12 +12,12 @@ from commands import COMMANDS, handler, listening
 import schedule
 from slackclient import SlackClient
 
-from config import (ADMIN, MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME,
+from config import (MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME, UPDATE_CHANNEL,
                     configure_logging)
 from slack_utils import (ApiCallException, EventId, User, delete_message,
                          get_channel_by_name, get_id, get_self,
                          get_user_by_name, get_users_in_channel, is_bot,
-                         parse_arguments, post_dm)
+                         parse_arguments, post_message)
 
 
 def prune_listening():
@@ -80,6 +80,12 @@ def process_events(events):
 
             # See if it's a valid command.
             argv = event['text'].split()
+
+            # Sometimes there's nothing here. Unsure what's up with that.
+            if argv.empty():
+                delete_message(slack_client, event)
+                break
+
             if argv[0] not in COMMANDS:
                 # Not a command? Delete!
                 delete_message(slack_client, event)
@@ -133,8 +139,9 @@ if __name__ == '__main__':
 
     while True:
         try:
-            post_dm(slack_client, ADMIN, 'I have awoken.')
+            post_message(slack_client, UPDATE_CHANNEL, 'Started.')
             run()
         except:
+            post_message(slack_client, UPDATE_CHANNEL, 'Unhandled exception.')
             logging.exception('unhandled exception')
             time.sleep(20)
