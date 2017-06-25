@@ -156,7 +156,7 @@ class Client(SlackClient):
         '''
         response = check(self.api_call('users.info', user=user))
         user_info = response['user']
-        return user_info['deleted'] or user_info['is_bot']
+        return not user_info['deleted'] and not user_info['is_bot']
 
     def ping(self):
         '''
