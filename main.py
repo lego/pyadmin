@@ -61,6 +61,7 @@ def process_event(event):
             if command.matches(parsed_args):
                 handler(command, event, parsed_args, slack_client)
                 return
+
         # Probably not a valid command
         slack_client.delete_message(event)
     elif event_type == 'reaction_added':
@@ -102,7 +103,7 @@ if __name__ == '__main__':
 
     while True:
         try:
-            slack_client.send_message(slack_client, UPDATE_CHANNEL, 'Started.')
+            slack_client.send_message(UPDATE_CHANNEL, 'Started.')
             run()
         except ConnectionError:
             logging.warning('could not connect to slack')
@@ -110,6 +111,6 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             break
         except:
-            post_message(slack_client, UPDATE_CHANNEL, 'Unhandled exception.')
+            slack_client.send_message(UPDATE_CHANNEL, 'Unhandled exception.')
             logging.exception('unhandled exception')
             time.sleep(10)
