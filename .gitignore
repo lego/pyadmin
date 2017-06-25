@@ -103,3 +103,4 @@ ENV/
 logs
 config.py
 db.db
+.vscode

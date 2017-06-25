@@ -2,77 +2,118 @@
 All commands and their metadata live in here.
 '''
 
-import logging
 import os
 import sys
 import time
-import typing
 from functools import singledispatch
-from typing import Callable, Dict, List, NamedTuple, Union
+from operator import eq
+from typing import Dict, List
 
 import git
 
 from config import ADMIN, CHANNEL
-from slack_utils import (ArgumentType, Channel, EventId, delete_message,
-                         get_channel_by_name, get_channel_name, get_id,
-                         get_reaction_sum, get_user_by_name,
-                         get_users_in_channel, is_active_and_human,
-                         post_message)
+from parser import Argument, ArgumentMatcher, ArgumentType
+from slack import get_id
 from store import get_value, set_value
+from util import log
 
-ListeningEvent = NamedTuple('ListeningEvent', [
-    ('ts', float),
-    ('fn', Callable[[], bool])
-])
 
-listening: Dict[EventId, ListeningEvent] = {}
+class ListeningEvent:
+    def __init__(self, ts, fn):
+        self.ts = ts
+        self.fn = fn
 
-SyncCommand = NamedTuple('SyncCommand', [
-    ('args', List[ArgumentType]),
-    ('fn', Callable),
-])
 
-AdminCommand = NamedTuple('AdminCommand', [
-    ('args', List[ArgumentType]),
-    ('fn', Callable),
-])
+class Command:
+    '''
+    Base class for all command types.
+    '''
 
-VoteCommand = NamedTuple('VoteCommand', [
-    ('args', List[ArgumentType]),
-    ('fn', Callable),
-    ('message', Callable[[List[str]], str]),
-    ('key', str)
-])
+    def __init__(self, name: str, args: List[ArgumentMatcher], fn, cmp=eq) -> None:
+        self.name = name
+        self.args = args
+        self.fn = fn
+        self.cmp = cmp
+        self.args.insert(0, ArgumentMatcher(ArgumentType.COMMAND, name))
+
+    def matches(self, args: List[Argument]):
+        '''
+        Returns true if the arguments matches this command.
+        '''
+        return self.cmp(self.args, args)
+
+    def __repr__(self):
+        return f'Command({self.name}, {self.args})'
+
+    def __str__(self):
+        return f'Command({self.name}, {self.args})'
+
+
+class SyncCommand(Command):
+    '''
+    A sync command will execute synchronously.
+    '''
+    pass
+
+
+class AdminCommand(Command):
+    '''
+    An admin command is runnable only by admins.
+    '''
+    pass
+
+
+class VoteCommand(Command):
+    '''
+    A vote command will start a vote and wait for enough
+    votes before running.
+    '''
+
+    def __init__(self, name: str, args: List[ArgumentMatcher], fn, message, key) -> None:
+        super(VoteCommand, self).__init__(name, args, fn)
+        self.message = message
+        self.key = key
+
+
+listening: Dict[str, ListeningEvent] = {}
+
+
+def loose_cmp(matchers: List[ArgumentMatcher], arguments: List[Argument]):
+    '''
+    Returns true if one of the lists extends the other.
+    e.g. loose_cmp([1, 2], [1, 2, 3]) returns true.
+    '''
+    length = len(matchers)
+    return matchers[:length] == arguments[:length]
 
 
 @singledispatch
-def handler(command: VoteCommand, event, args: List[str], slack_client):
+@log
+def handler(command: Command, event, args: List[Argument], slack_client):
+    '''
+    Function is only here for single dispatch.
+    '''
+    raise Exception('should never be called')
+
+
+@handler.register(VoteCommand)
+@log
+def _vote_handler(command: VoteCommand, event, args: List[Argument], slack_client):
     '''
     Handles vote based commands.
     '''
-    logging.info(f'event={event}, args={args}, command={command}')
-
     # Filter to only the CHANNEL channel.
-    voting_channel = get_channel_by_name(slack_client, CHANNEL)
-    if event.get('channel', None) != voting_channel:
+    voting_channel = slack_client.get_channel_by_name(CHANNEL)
+    channel = event['channel']
+    if channel != voting_channel:
         return
 
-    channel = event['channel']
     votes_required = get_value(command.key)
-    response = post_message(
-        slack_client,
-        channel,
-        f'{command.message(args)} {votes_required} votes required.'
-    )
+    response = slack_client.send_message(
+        channel, f'{command.message(args)} {votes_required} votes required.')
 
-    def _handler() -> bool:
-        reactions = slack_client.api_call(
-            'reactions.get',
-            channel=response['channel'],
-            timestamp=response['ts'],
-            full=True
-        )
-        current_votes = get_reaction_sum(reactions)
+    def _handler():
+        current_votes = slack_client.get_reaction_sum(response)
         if current_votes >= votes_required:
             command.fn(slack_client, channel, args)
             return True
@@ -83,122 +124,120 @@ def handler(command: VoteCommand, event, args: List[str], slack_client):
 
 
 @handler.register(SyncCommand)
-def _(command: SyncCommand, event, args: List[str], slack_client):
+@log
+def _sync_handler(command: SyncCommand, event, args: List[Argument], slack_client):
     '''
     Handlers synchronous commands.
     '''
-    logging.info(f'event={event}, args={args}, command={command}')
     command.fn(slack_client, event['channel'], args)
 
 
 @handler.register(AdminCommand)
-def __(command: AdminCommand, event, args: List[str], slack_client):
+@log
+def _admin_handler(command: AdminCommand, event, args: List[Argument], slack_client):
     '''
     Handles admin level commands.
     '''
-    logging.info(f'event={event}, args={args}, command={command}')
-    if event['user'] == get_user_by_name(slack_client, ADMIN):
+    if event['user'] == slack_client.get_user_by_name(ADMIN):
         command.fn(slack_client, event['channel'], args)
     else:
-        delete_message(slack_client, event)
+        slack_client.delete_message(event)
 
 
-def vote_fn(slack_client, channel: Channel, args: List[str]):
+def vote_fn(slack_client, channel, args: List[Argument]):
     '''
     Changes the number of votes required.
     '''
-    command = COMMANDS[args[0]]
-    if isinstance(command, VoteCommand):
-        set_value(command.key, args[1])
-        post_message(slack_client, channel,
-                     f'Changed `{args[0]}` to require {args[1]} votes.')
+    command_name = args[1].val
+    new_value = args[2].val
+
+    command = next(cmd for cmd in COMMANDS if cmd.name == command_name)
+    set_value(command.key, new_value)
+    slack_client.send_message(
+        channel, f'Changed `{command_name}` to require {new_value} votes.')
 
 
-def rename_fn(slack_client, channel: Channel, args: List[str]):
+def rename_fn(slack_client, channel, args: List[Argument]):
     '''
     Changes the name of a channel.
     '''
-    channel_id = typing.cast(Channel, args[0])
-    new_name = args[1]
-    original_name = get_channel_name(slack_client, channel_id)
+    channel_id = args[1].val
+    new_name = args[2].val
+    original_name = slack_client.get_channel_name(channel_id)
 
-    response = slack_client.api_call(
-        'channels.rename',
-        channel=channel_id,
-        name=new_name.replace('#', ''),
-        validate=True
-    )
+    response = slack_client.rename_channel(channel_id, new_name)
     if not response['ok']:
-        logging.warning(f'response={response}')
-        post_message(slack_client, channel,
-                     f'Could not rename <#{channel_id}> to {new_name}.')
+        slack_client.send_message(
+            channel, f'Could not rename <#{channel_id}> to {new_name}.')
     else:
-        post_message(slack_client, channel,
-                     f'Renamed <#{channel_id}> from #{original_name} to {new_name}.')
+        slack_client.send_message(
+            channel, f'Renamed <#{channel_id}> from #{original_name} to {new_name}.')
 
 
-def kick_fn(slack_client, channel: Channel, args: List[str]):
+def kick_fn(slack_client, channel, args: List[Argument]):
     '''
     Kicks a user from a channel.
     '''
-    response = slack_client.api_call(
-        'channels.kick',
-        user=args[0],
-        channel=args[1],
-    )
+    user = args[1].val
+    chan = args[2].val
+    response = slack_client.kick_user(user, chan)
     if not response['ok']:
-        logging.warning(f'could not kick user response={response}')
-        post_message(slack_client, channel,
-                     f'Could not kick <@{args[0]}> from <#{args[1]}>.')
+        slack_client.send_message(
+            channel, f'Could not kick <@{user}> from <#{chan}>.')
     else:
-        post_message(slack_client, channel,
-                     f'Kicked <@{args[0]}> from <#{args[1]}>.')
+        slack_client.send_message(
+            channel, f'Kicked <@{user}> from <#{chan}>.')
 
 
-def invite_fn(slack_client, channel: Channel, args: List[str]):
+def invite_fn(slack_client, channel, args: List[Argument]):
     '''
     Invites a user to this slack.
     '''
-    response = slack_client.api_call(
-        'users.admin.invite',
-        email=args[0]
-    )
+    email = args[1].val
+    response = slack_client.invite_email(email)
     if not response['ok']:
-        logging.warning(f'could not invite user response={response}')
-        post_message(slack_client, channel,
-                     f'Could not invite <mailto:{args[0]}> to this slack.')
+        slack_client.send_message(
+            channel, f'Could not invite <mailto:{email}> to this slack.')
     else:
-        post_message(slack_client, channel,
-                     f'Invited <mailto:{args[0]}> to this slack.')
+        slack_client.send_message(
+            channel, f'Invited <mailto:{email}> to this slack.')
 
 
-def help_fn(slack_client, channel: Channel, args: List[str]):
+def help_fn(slack_client, channel, args: List[Argument]):
     '''
     Outputs a help message.
     '''
     help_message = 'Actions are voted on using :+1: and :-1:. I support the following commands:```'
-    for key, val in COMMANDS.items():
-        line = f"\n– {key}"
-        for arg in val.args:
-            line += f" <{arg.name}>"
-        if isinstance(val, VoteCommand):
+    for cmd in COMMANDS:
+        line = f"\n– {cmd.name}"
+        for arg in cmd.args:
+            if arg.typ != ArgumentType.COMMAND:
+                line += f" <{arg.typ}>"
+        if isinstance(cmd, VoteCommand):
             line = line.ljust(35)
-            votes_required = get_value(val.key)
+            votes_required = get_value(cmd.key)
             line += f' {votes_required} votes required.'
         help_message += line
 
     help_message += "```"
-    post_message(slack_client, channel, help_message)
+    slack_client.send_message(channel, help_message)
 
 
-def pong_fn(slack_client, channel: Channel, args: List[str]):
+def pong_fn(slack_client, channel, args: List[Argument]):
     '''
     Outputs a pong.
     '''
-    post_message(slack_client, channel, 'pong')
+    slack_client.send_message(channel, 'pong')
 
 
-def update_fn(slack_client, channel: Channel, args: List[str]):
+def ping_fn(slack_client, channel, args: List[Argument]):
+    '''
+    Outputs a ping.
+    '''
+    slack_client.send_message(channel, 'ping')
+
+
+def update_fn(slack_client, channel, args: List[Argument]):
     '''
     Pulls from git and reloads the process.
     '''
@@ -206,57 +245,96 @@ def update_fn(slack_client, channel: Channel, args: List[str]):
     try:
         g.pull()
     except:
-        post_message(slack_client, channel, f'Could not git pull.')
+        slack_client.send_message(channel, f'Could not git pull.')
         return
 
     # This will not return. Instead, the process will be immediately replaced.
     os.execl(sys.executable, *([sys.executable] + sys.argv))
 
 
-def intersect_fn(slack_client, channel: Channel, args: List[str]):
+def _intersect(slack_client, channel, lennahc) -> str:
     '''
-    Gets the intersection of two channels users and pings them.
+    Returns a formatted string of users in channel and lennahc.
     '''
-    users = get_users_in_channel(slack_client, args[0])
-    sresu = get_users_in_channel(slack_client, args[1])
+    users = slack_client.get_users_in_channel(channel)
+    sresu = slack_client.get_users_in_channel(lennahc)
 
     line = ''
     for user in users.intersection(sresu):
-        if is_active_and_human(slack_client, user):
+        if slack_client.is_active_and_human(user):
             line += f'<@{user}> '
     if line == '':
         line = 'No intersection.'
+    return line
 
-    post_message(slack_client, channel, line)
+
+def intersect_fn(slack_client, channel, args: List[Argument]):
+    '''
+    Gets the intersection of two channels users and pings them.
+    '''
+    intersection = _intersect(slack_client, args[1].val, args[2].val)
+    slack_client.send_message(channel, intersection)
 
 
-COMMANDS: Dict[str, Union[SyncCommand, VoteCommand, AdminCommand]] = {
-    '.help': SyncCommand([], help_fn),
-    '.ping': SyncCommand([], pong_fn),
-    '.update': AdminCommand([], update_fn),
-    '.intersect': SyncCommand([ArgumentType.CHANNEL, ArgumentType.CHANNEL], intersect_fn),
-    '.vote': VoteCommand(
-        [ArgumentType.COMMAND, ArgumentType.INT],
+def intersect_short_fn(slack_client, channel, args: List[Argument]):
+    '''
+    Intersect but shortcuts to using current channel as one half of
+    the intersection.
+    '''
+    intersection = _intersect(slack_client, args[1].val, channel)
+    slack_client.send_message(channel, intersection)
+
+
+ANY_CHANNEL = ArgumentMatcher(ArgumentType.CHANNEL)
+ANY_VOTE_COMMAND = ArgumentMatcher(ArgumentType.VOTING_COMMAND)
+ANY_INT = ArgumentMatcher(ArgumentType.INT)
+ANY_STRING = ArgumentMatcher(ArgumentType.STRING)
+ANY_USER = ArgumentMatcher(ArgumentType.USER)
+ANY_EMAIL = ArgumentMatcher(ArgumentType.EMAIL)
+
+COMMANDS: List[Command] = [
+    SyncCommand('.help', [], help_fn),
+    SyncCommand('.ping', [], pong_fn),
+    SyncCommand('.pong', [], ping_fn),
+    SyncCommand(
+        '.intersect',
+        [ANY_CHANNEL, ANY_CHANNEL],
+        intersect_fn,
+        cmp=loose_cmp
+    ),
+    SyncCommand(
+        '.intersect',
+        [ANY_CHANNEL],
+        intersect_short_fn,
+        cmp=loose_cmp
+    ),
+    AdminCommand('.update', [], update_fn),
+    VoteCommand(
+        '.vote',
+        [ANY_VOTE_COMMAND, ANY_INT],
         vote_fn,
         lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
         'vote'
     ),
-    '.rename': VoteCommand(
-        [ArgumentType.CHANNEL, ArgumentType.STRING],
-        rename_fn,
+    VoteCommand(
+        '.rename',
+        [ANY_CHANNEL, ANY_STRING],
+        vote_fn,
         lambda args: f'Rename <#{args[0]}> to {args[1]}?',
         'rename'
     ),
-    '.kick': VoteCommand(
-        [ArgumentType.USER, ArgumentType.CHANNEL],
+    VoteCommand(
+        '.kick',
+        [ANY_USER, ANY_CHANNEL],
         kick_fn,
         lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
         'kick'
     ),
-    '.invite': VoteCommand(
-        [ArgumentType.EMAIL],
+    VoteCommand(
+        '.invite',
+        [ANY_EMAIL],
         invite_fn,
         lambda args: f'Invite <mailto:{args[0]}> to this slack?',
         'invite'
     ),
-}
+]
