@@ -42,7 +42,7 @@ class Argument:
             return other == self
 
     def __str__(self):
-        return f'Argument({self.typ}, {self.val})'
+        return f'{self.val}'
 
     def __repr__(self):
         return f'Argument({self.typ}, {self.val})'
@@ -70,15 +70,12 @@ class ArgumentMatcher:
 
     def __str__(self):
         if self.desired != None:
-            return f'ArgumentMatcher({self.typ}, {self.desired})'
+            return f'{self.desired}'
         else:
-            return f'ArgumentMatcher({self.typ})'
+            return f'<{self.typ}>'
 
     def __repr__(self):
-        if self.desired != None:
-            return f'ArgumentMatcher({self.typ}, {self.desired})'
-        else:
-            return f'ArgumentMatcher({self.typ})'
+        return self.__str__()
 
 
 def parse_channel(input_string: str) -> Tuple[Argument, bool]:
@@ -117,7 +114,7 @@ def parse_command(input_string: str) -> Tuple[Argument, bool]:
     '''
     import commands
     for command in commands.COMMANDS:
-        if command.name == input_string:
+        if command.name == input_string and not isinstance(command, commands.VoteCommand):
             return Argument(ArgumentType.COMMAND, input_string), True
     return None, False
 
@@ -154,7 +151,8 @@ def parse_arguments(args: List[str]) -> List[Argument]:
     for arg in args:
         # The string type is the most lenient so we default to that.
         default = Argument(ArgumentType.STRING, arg)
-        for parse in [parse_channel, parse_user, parse_email, parse_command, parse_int]:
+        for parse in [parse_channel, parse_user, parse_email, parse_command,
+                      parse_voting_command, parse_int]:
             res, match = parse(arg)
             if match:
                 default = res

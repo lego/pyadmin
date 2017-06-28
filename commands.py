@@ -5,23 +5,20 @@ All commands and their metadata live in here.
 import os
 import sys
 import time
+from collections import namedtuple
 from functools import singledispatch
 from operator import eq
 from typing import Dict, List
 
 import git
 
-from config import ADMIN, CHANNEL
+from config import ADMIN
 from parser import Argument, ArgumentMatcher, ArgumentType
 from slack import get_id
-from store import get_value, set_value
+from store import DiskStore
 from util import log
 
-
-class ListeningEvent:
-    def __init__(self, ts, fn):
-        self.ts = ts
-        self.fn = fn
+ListeningEvent = namedtuple('ListeningEvent', ['ts', 'fn'])
 
 
 class Command:
@@ -40,13 +37,13 @@ class Command:
         '''
         Returns true if the arguments matches this command.
         '''
-        return self.cmp(self.args, args)
-
-    def __repr__(self):
-        return f'Command({self.name}, {self.args})'
+        return self.cmp(self.args, args)  # The order of arguments matters.
 
     def __str__(self):
         return f'Command({self.name}, {self.args})'
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class SyncCommand(Command):
@@ -69,10 +66,13 @@ class VoteCommand(Command):
     votes before running.
     '''
 
-    def __init__(self, name: str, args: List[ArgumentMatcher], fn, message, key) -> None:
-        super(VoteCommand, self).__init__(name, args, fn)
+    def __init__(self, name: str, args: List[ArgumentMatcher], fn, message, key, cmp=eq) -> None:
+        super(VoteCommand, self).__init__(name, args, fn, cmp)
         self.message = message
         self.key = key
+        # Hacky work around.
+        self.args.pop(0)
+        self.args.insert(0, ArgumentMatcher(ArgumentType.VOTING_COMMAND, name))
 
 
 listening: Dict[str, ListeningEvent] = {}
@@ -103,12 +103,11 @@ def _vote_handler(command: VoteCommand, event, args: List[Argument], slack_clien
     Handles vote based commands.
     '''
     # Filter to only the CHANNEL channel.
-    voting_channel = slack_client.get_channel_by_name(CHANNEL)
     channel = event['channel']
-    if channel != voting_channel:
+    if channel != slack_client.admin_channel:
         return
 
-    votes_required = get_value(command.key)
+    votes_required = DiskStore.get_value(command.key)
     response = slack_client.send_message(
         channel, f'{command.message(args)} {votes_required} votes required.')
 
@@ -152,7 +151,10 @@ def vote_fn(slack_client, channel, args: List[Argument]):
     new_value = args[2].val
 
     command = next(cmd for cmd in COMMANDS if cmd.name == command_name)
-    set_value(command.key, new_value)
+    if not isinstance(command, VoteCommand):
+        raise Exception('should never happen')
+
+    DiskStore.set_value(command.key, new_value)
     slack_client.send_message(
         channel, f'Changed `{command_name}` to require {new_value} votes.')
 
@@ -209,13 +211,12 @@ def help_fn(slack_client, channel, args: List[Argument]):
     '''
     help_message = 'Actions are voted on using :+1: and :-1:. I support the following commands:```'
     for cmd in COMMANDS:
-        line = f"\n– {cmd.name}"
+        line = f"\n– "
         for arg in cmd.args:
-            if arg.typ != ArgumentType.COMMAND:
-                line += f" <{arg.typ}>"
+            line += f" {arg}"
         if isinstance(cmd, VoteCommand):
             line = line.ljust(35)
-            votes_required = get_value(cmd.key)
+            votes_required = DiskStore.get_value(cmd.key)
             line += f' {votes_required} votes required.'
         help_message += line
 
@@ -296,45 +297,45 @@ COMMANDS: List[Command] = [
     SyncCommand('.help', [], help_fn),
     SyncCommand('.ping', [], pong_fn),
     SyncCommand('.pong', [], ping_fn),
-    SyncCommand(
-        '.intersect',
-        [ANY_CHANNEL, ANY_CHANNEL],
-        intersect_fn,
-        cmp=loose_cmp
-    ),
+    AdminCommand('.update', [], update_fn),
     SyncCommand(
         '.intersect',
         [ANY_CHANNEL],
         intersect_short_fn,
         cmp=loose_cmp
     ),
-    AdminCommand('.update', [], update_fn),
+    SyncCommand(
+        '.intersect',
+        [ANY_CHANNEL, ANY_CHANNEL],
+        intersect_fn,
+        cmp=loose_cmp
+    ),
     VoteCommand(
         '.vote',
         [ANY_VOTE_COMMAND, ANY_INT],
         vote_fn,
-        lambda args: f'Change `{args[0]}` to require {args[1]} votes?',
+        lambda args: f'Change `{args[1]}` to require {args[2]} votes?',
         'vote'
     ),
     VoteCommand(
         '.rename',
         [ANY_CHANNEL, ANY_STRING],
         vote_fn,
-        lambda args: f'Rename <#{args[0]}> to {args[1]}?',
+        lambda args: f'Rename <#{args[1]}> to {args[2]}?',
         'rename'
     ),
     VoteCommand(
         '.kick',
         [ANY_USER, ANY_CHANNEL],
         kick_fn,
-        lambda args: f'Kick <@{args[0]}> from <#{args[1]}>?',
+        lambda args: f'Kick <@{args[1]}> from <#{args[2]}>?',
         'kick'
     ),
     VoteCommand(
         '.invite',
         [ANY_EMAIL],
         invite_fn,
-        lambda args: f'Invite <mailto:{args[0]}> to this slack?',
+        lambda args: f'Invite <mailto:{args[1]}> to this slack?',
         'invite'
     ),
 ]

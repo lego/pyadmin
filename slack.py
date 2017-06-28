@@ -23,7 +23,7 @@ class Client(SlackClient):
 
     def __init__(self, token):
         super(Client, self).__init__(token)
-        self.deletion_channel = self.get_channel_by_name(config.CHANNEL)
+        self.admin_channel = self.get_channel_by_name(config.CHANNEL)
         response = self.api_call('auth.test')
         if not response['ok']:
             raise Exception('could not get self')
@@ -133,7 +133,7 @@ class Client(SlackClient):
         Given an event we attempt to delete it.
         '''
         channel = event['channel']
-        if channel != self.deletion_channel:
+        if channel != self.admin_channel:
             return
 
         check(self.api_call('chat.delete', ts=event['ts'], channel=channel))

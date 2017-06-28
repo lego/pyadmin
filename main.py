@@ -13,9 +13,9 @@ import schedule
 
 from config import (MAX_LISTENING, SLACK_TOKEN, SLEEP_TIME, UPDATE_CHANNEL,
                     configure_logging)
-
 from parser import parse_arguments
 from slack import ApiCallException, Client, get_id
+
 
 def prune_listening():
     '''
@@ -30,7 +30,7 @@ def prune_listening():
         del listening[expired_event]
 
 
-def process_event(event):
+def process_event(slack_client, event):
     '''
     For each event we filter to reactions and messages
     and route accordingly.
@@ -72,7 +72,8 @@ def process_event(event):
                 if listening[event_id].fn():
                     del listening[event_id]
 
-def run():
+
+def run(slack_client):
     '''
     Main event loop.
     '''
@@ -81,7 +82,7 @@ def run():
             events = slack_client.rtm_read()
             for event in events:
                 try:
-                    process_event(event)
+                    process_event(slack_client, event)
                 except ApiCallException as api_call_exception:
                     logging.warning(api_call_exception)
             schedule.run_pending()
@@ -90,7 +91,10 @@ def run():
         raise ConnectionError()
 
 
-if __name__ == '__main__':
+def main():
+    '''
+    Starts the program and event loop, etc.
+    '''
     configure_logging()
 
     slack_client = Client(SLACK_TOKEN)
@@ -98,13 +102,13 @@ if __name__ == '__main__':
     schedule.every().hour.do(prune_listening)
 
     # Not sure if this is useful yet. Might assure that we
-    # reconnect to slack if we ever DC.
+    # reconnect to slack if we ever disconnect.
     schedule.every().minute.do(slack_client.ping)
 
     while True:
         try:
             slack_client.send_message(UPDATE_CHANNEL, 'Started.')
-            run()
+            run(slack_client)
         except ConnectionError:
             logging.warning('could not connect to slack')
             time.sleep(10)
@@ -114,3 +118,7 @@ if __name__ == '__main__':
             slack_client.send_message(UPDATE_CHANNEL, 'Unhandled exception.')
             logging.exception('unhandled exception')
             time.sleep(10)
+
+
+if __name__ == '__main__':
+    main()
