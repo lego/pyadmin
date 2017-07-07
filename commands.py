@@ -320,7 +320,7 @@ COMMANDS: List[Command] = [
     VoteCommand(
         '.rename',
         [ANY_CHANNEL, ANY_STRING],
-        vote_fn,
+        rename_fn,
         lambda args: f'Rename <#{args[1]}> to {args[2]}?',
         'rename'
     ),

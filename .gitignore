@@ -104,3 +104,4 @@ logs
 config.py
 db.db
 .vscode
+.idea/
