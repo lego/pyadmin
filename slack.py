@@ -3,10 +3,16 @@ Wrapper around slack client so that we can test easily.
 '''
 
 from functools import lru_cache
-
 from slackclient import SlackClient
+from selenium import webdriver
 
 import config
+
+# driver is used for accessing Admin options that are not exposed via.
+# an API, such as updating the workspace name.
+driver = webdriver.PhantomJS()
+# TBH, not sure if this is required.
+driver.set_window_size(1024, 768)
 
 
 class ApiCallException(Exception):
@@ -164,6 +170,58 @@ class Client(SlackClient):
         '''
         self.server.ping()
 
+    def update_team_name(self):
+        '''
+        Updates a team name on Slack. It uses a phantomJS browser to do
+        this through the Slack Admin website.
+        '''
+
+        new_workspace_name = "lalala"
+        # FIXME(joey): Badmin login details. Ideally this comes from
+        # environment variables.
+        SLACK_TEAM = "some_slack_team"
+        BADMIN_LOGIN = "some@email.com"
+        BADMIN_PASSWORD = "xxxx"
+
+        # Delete all cookies to remove the past login session. This
+        # ensures that we log in as expected every time.
+        # TODO(joey): We can instead detect whether we need to log in
+        # again (i.e. a redirect).
+        driver.delete_all_cookies()
+        # Open the slack admin page.
+        driver.get(
+            'https://{slackTeam}.slack.com/admin/name'.format(slackTeam=SLACK_TEAM))
+
+        login_form_email = driver.find_element_by_id('email')
+        login_form_password = driver.find_element_by_id('password')
+        login_form_submit = driver.find_element_by_id('signin_btn')
+
+        # Enter the email into the form. Sadly, this workaround is
+        # required because sending keys to the email field does nothing.
+        # An educated guess is that phantomJS does not interact
+        # correctly with HTML5 validated fields, in paritcular, HTML5
+        # email validation.
+        driver.execute_script(
+            "document.getElementById('{}').value='{}'".format("email", BADMIN_LOGIN))
+
+        # Fill in the password field.
+        login_form_password.clear()
+        login_form_password.send_keys(BADMIN_PASSWORD)
+
+        # Submit the login form.
+        login_form_submit.click()
+
+        # We have now navigated to the Workspace Name and URL setting page.
+        workspace_form_team_name = driver.find_element_by_id('team_name_input')
+        workspace_form_submit = driver.find_element_by_id('submit_btn')
+
+        workspace_form_team_name.clear()
+        workspace_form_team_name.send_keys(new_workspace_name)
+
+        # Submit the new workspace page.
+        workspace_form_submit.click()
+
+        # TODO(joey): Detect if we have encountered an error.
 
 def get_id(event):
     '''
